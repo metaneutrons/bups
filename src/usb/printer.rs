@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Fabian Schmieder
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! USB printer communication.
+//! USB printer communication via nusb.
+//!
+//! Handles device detection, connection, and bidirectional data transfer.
+//! Uses chunked writes (4KB) for compatibility with QL printers' smaller USB buffers.
 
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;

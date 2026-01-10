@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Printer status parsing.
+//!
+//! Parses 32-byte status responses from Brother printers.
+//! Status format documented in Brother Raster Command Reference.
 
 use crate::config::USB_READ_SIZE;
 

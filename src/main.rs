@@ -3,6 +3,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! bups - print server for USB-based label printers.
+//!
+//! Exposes USB-connected Brother PT/QL printers over the network via:
+//! - TCP port 9100 (raw print data with bidirectional status)
+//! - mDNS/Bonjour advertisement for automatic discovery
+//! - SNMP port 161 for status queries
 
 mod config;
 mod error;

@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Fabian Schmieder
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! USB device definitions.
+//! USB device definitions for Brother PT/QL printers.
+//!
+//! Maps USB product IDs to device types and provides model metadata.
 
 /// Supported printer devices.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

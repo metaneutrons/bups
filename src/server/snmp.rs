@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! SNMP responder for printer status queries.
+//!
+//! Responds to Brother-specific OID (1.3.6.1.4.1.2435.3.3.9.1.6.1.0)
+//! with raw 32-byte printer status.
 
 use std::sync::Arc;
 use tokio::net::UdpSocket;

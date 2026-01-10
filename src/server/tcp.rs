@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! TCP print server (port 9100).
+//!
+//! Accepts raw print data and forwards to USB printer.
+//! Returns 32-byte status responses after each write (Brother protocol).
 
 use std::sync::Arc;
 use std::time::Duration;

@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Fabian Schmieder
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! mDNS service advertisement.
+//! mDNS/Bonjour service advertisement.
+//!
+//! Advertises printer as `_pdl-datastream._tcp` for automatic discovery
+//! by macOS, iOS, and other Bonjour-aware clients.
 
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use tracing::{error, info};

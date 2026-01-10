@@ -23,6 +23,8 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
           - os: macos-15-intel
             target: x86_64-apple-darwin
           - os: macos-latest
@@ -34,7 +36,7 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install cross-compilation tools
+      - name: Install cross-compilation tools (aarch64)
         if: contains(matrix.target, 'aarch64-unknown-linux')
         run: |
           sudo apt-get update
@@ -45,6 +47,17 @@ jobs:
           linker = "aarch64-linux-gnu-gcc"
           [target.aarch64-unknown-linux-musl]
           linker = "aarch64-linux-gnu-gcc"
+          EOF
+
+      - name: Install cross-compilation tools (armv7)
+        if: matrix.target == 'armv7-unknown-linux-musleabihf'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf musl-tools
+          mkdir -p .cargo
+          cat >> .cargo/config.toml << EOF
+          [target.armv7-unknown-linux-musleabihf]
+          linker = "arm-linux-gnueabihf-gcc"
           EOF
 
       - name: Install musl tools

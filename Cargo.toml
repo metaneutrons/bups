@@ -26,6 +26,7 @@ rasn = "0.28"
 rasn-snmp = "0.28"
 rasn-smi = "0.28"
 thiserror = "2"
+bitflags = "2"
 
 [target.'cfg(unix)'.dependencies]
 syslog-tracing = "0.3"

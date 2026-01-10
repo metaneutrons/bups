@@ -14,7 +14,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
-use crate::config::{POST_WRITE_DELAY_MS, TCP_BUFFER_SIZE};
+use crate::config::{POST_WRITE_DELAY_MS, TCP_BUFFER_SIZE, USB_READ_SIZE, STATUS_OFF_STATUS_TYPE, STATUS_OFF_PHASE};
 use crate::error::Result;
 use crate::status::Status;
 use crate::usb::Printer;
@@ -43,7 +43,7 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
 
 async fn handle_connection(mut stream: TcpStream, printer: Arc<Mutex<Option<Printer>>>) -> Result<()> {
     let mut buf = [0u8; TCP_BUFFER_SIZE];
-    let mut last_status = [0u8; 32];
+    let mut last_status = [0u8; USB_READ_SIZE];
 
     loop {
         let n = stream.read(&mut buf).await?;
@@ -79,7 +79,7 @@ async fn handle_connection(mut stream: TcpStream, printer: Arc<Mutex<Option<Prin
         let read_ok = if let Ok(raw) = p.read_raw().await {
             debug!(raw = ?&raw[..8], "raw status bytes");
             if let Some(s) = Status::parse(raw) {
-                debug!(status_type = raw[18], phase = raw[20], "printer status");
+                debug!(status_type = raw[STATUS_OFF_STATUS_TYPE], phase = raw[STATUS_OFF_PHASE], "printer status");
                 if s.error_message().is_some() {
                     warn!(error = ?s.error_message(), "printer error");
                 }
@@ -88,9 +88,9 @@ async fn handle_connection(mut stream: TcpStream, printer: Arc<Mutex<Option<Prin
             true
         } else {
             // FIXME: nusb can't read status after print command - workaround by faking ready status
-            if n <= 4 && last_status[18] == 6 {
-                last_status[18] = 0; // Set status_type to ready
-                last_status[20] = 0; // Set phase to 0
+            if n <= 4 && last_status[STATUS_OFF_STATUS_TYPE] == 6 {
+                last_status[STATUS_OFF_STATUS_TYPE] = 0; // Set status_type to ready
+                last_status[STATUS_OFF_PHASE] = 0; // Set phase to 0
             }
             false
         };
@@ -118,12 +118,11 @@ async fn handle_command(data: &[u8], printer: &Arc<Mutex<Option<Printer>>>) -> O
                 Ok(raw) => {
                     if let Some(s) = Status::parse(raw) {
                         let status = if s.error_message().is_some() { "ERROR" } else { "READY" };
+                        let model = p.device().model_name();
+                        let error = s.error_message().unwrap_or("None");
                         Some(format!(
-                            "STATUS: {}\nModel: {}\nMedia: {}mm\nError: {}\n",
-                            status,
-                            p.device().model_name(),
-                            s.media_width,
-                            s.error_message().unwrap_or("None")
+                            "STATUS: {status}\nModel: {model}\nMedia: {}mm\nError: {error}\n",
+                            s.media_width
                         ))
                     } else {
                         Some("STATUS: Unknown\n".into())

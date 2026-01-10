@@ -14,12 +14,13 @@ use nusb::transfer::{Bulk, In, Out};
 use nusb::MaybeFuture;
 use tracing::{debug, trace, warn};
 
-use crate::config::{BROTHER_VENDOR_ID, INIT_CMD, INVALIDATE_CMD, USB_READ_SIZE, USB_TIMEOUT_MS};
+use crate::config::{
+    BROTHER_VENDOR_ID, INIT_CMD, INVALIDATE_CMD, STATUS_MAGIC, STATUS_REQUEST,
+    USB_EP_IN, USB_EP_OUT, USB_READ_BUFFER, USB_READ_RETRIES, USB_READ_SIZE,
+    USB_READ_TIMEOUT_MS, USB_STATUS_DELAY_MS, USB_TIMEOUT_MS,
+};
 use crate::error::{Error, Result};
 use crate::usb::Device;
-
-/// Status request command (ESC i S).
-const STATUS_REQUEST: [u8; 3] = [0x1b, 0x69, 0x53];
 
 /// List connected supported printers.
 pub fn list_printers() -> Vec<(&'static str, String)> {
@@ -101,9 +102,9 @@ impl Printer {
         let usb_device = dev_info.open().wait().map_err(Error::Usb)?;
         let interface = usb_device.claim_interface(0).wait().map_err(Error::Usb)?;
 
-        let ep_out = interface.endpoint::<Bulk, Out>(0x02)
+        let ep_out = interface.endpoint::<Bulk, Out>(USB_EP_OUT)
             .map_err(|e| Error::Transfer(e.to_string()))?;
-        let ep_in = interface.endpoint::<Bulk, In>(0x81)
+        let ep_in = interface.endpoint::<Bulk, In>(USB_EP_IN)
             .map_err(|e| Error::Transfer(e.to_string()))?;
 
         let printer = Self {
@@ -138,6 +139,9 @@ impl Printer {
         &self.serial
     }
 
+    /// Write data to printer (chunked for QL compatibility).
+    /// 
+    /// Note: Kept as async for API consistency, though USB ops are blocking.
     pub async fn write(&self, data: &[u8]) -> Result<()> {
         const CHUNK_SIZE: usize = 4096; // QL printers have smaller USB buffers
         let mut ep = self.ep_out.lock().unwrap();
@@ -155,21 +159,23 @@ impl Printer {
     }
 
     /// Read raw data from printer without sending status request.
+    /// 
+    /// Note: Kept as async for API consistency, though USB ops are blocking.
     pub async fn read_raw(&self) -> Result<[u8; USB_READ_SIZE]> {
         let mut ep_in = self.ep_in.lock().unwrap();
         
         // Clear any halt condition
         let _ = ep_in.clear_halt();
         
-        for attempt in 0..10 {
-            ep_in.submit(vec![0u8; 64].into());
-            match ep_in.wait_next_complete(Duration::from_millis(500)) {
+        for attempt in 0..USB_READ_RETRIES {
+            ep_in.submit(vec![0u8; USB_READ_BUFFER].into());
+            match ep_in.wait_next_complete(Duration::from_millis(USB_READ_TIMEOUT_MS)) {
                 Some(c) if c.status.is_ok() && c.actual_len > 0 => {
                     let mut buf = [0u8; USB_READ_SIZE];
                     let len = c.actual_len.min(USB_READ_SIZE);
                     buf[..len].copy_from_slice(&c.buffer[..len]);
-                    // Check for valid status header (0x80, 0x20)
-                    if buf[0] == 0x80 && buf[1] == 0x20 {
+                    // Check for valid status header
+                    if buf[0..2] == STATUS_MAGIC {
                         trace!(data = ?buf, attempt, "USB read valid status");
                         return Ok(buf);
                     }
@@ -185,9 +191,11 @@ impl Printer {
     }
 
     /// Read status from printer (sends status request first).
+    /// 
+    /// Note: Kept as async for API consistency, though USB ops are blocking.
     pub async fn read(&self) -> Result<[u8; USB_READ_SIZE]> {
         self.write(&STATUS_REQUEST).await?;
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        tokio::time::sleep(Duration::from_millis(USB_STATUS_DELAY_MS)).await;
         self.read_raw().await
     }
 }

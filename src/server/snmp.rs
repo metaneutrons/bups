@@ -16,11 +16,9 @@ use rasn::types::{Integer, ObjectIdentifier, OctetString};
 use rasn_snmp::v1::{GetRequest, GetResponse, Message, Pdu, Pdus, VarBind};
 use rasn_smi::v1::{ObjectSyntax, SimpleSyntax};
 
-use crate::config::BROTHER_STATUS_OID;
+use crate::config::{BROTHER_STATUS_OID, SNMP_BUFFER_SIZE};
 use crate::error::Result;
 use crate::usb::Printer;
-
-const SNMP_BUFFER_SIZE: usize = 1024;
 
 /// Start SNMP responder on given address.
 pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<()> {

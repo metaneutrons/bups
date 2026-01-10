@@ -25,7 +25,7 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use config::{DEFAULT_MAX_RECONNECT_ATTEMPTS, DEFAULT_RECONNECT_INTERVAL, SNMP_PORT, TCP_PORT};
+use config::{DEFAULT_MAX_RECONNECT_ATTEMPTS, DEFAULT_RECONNECT_INTERVAL, TCP_PORT, SNMP_PORT};
 use usb::{Printer, list_printers};
 
 fn init_stderr_logging(env_filter: EnvFilter) {
@@ -74,7 +74,7 @@ impl PidFileGuard {
                     // SAFETY: kill with signal 0 just checks if process exists
                     let exists = unsafe { libc::kill(pid, 0) == 0 };
                     if exists {
-                        return Err(format!("another instance already running (PID {})", pid));
+                        return Err(format!("another instance already running (PID {pid})"));
                     }
                 }
             }
@@ -84,7 +84,7 @@ impl PidFileGuard {
 
         // Write new PID file
         std::fs::write(path, std::process::id().to_string())
-            .map_err(|e| format!("failed to write PID file: {}", e))?;
+            .map_err(|e| format!("failed to write PID file: {e}"))?;
 
         Ok(Self(path.to_string()))
     }

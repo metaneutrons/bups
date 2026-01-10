@@ -6,6 +6,25 @@
 //!
 //! Maps USB product IDs to device types and provides model metadata.
 
+use bitflags::bitflags;
+
+bitflags! {
+    /// Printer capabilities for mDNS advertisement.
+    /// 
+    /// Currently all supported printers share the same capabilities,
+    /// but this allows per-device customization when new models are added.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Capabilities: u8 {
+        const COLOR = 0b0000_0001;
+        const COPIES = 0b0000_0010;
+        const DUPLEX = 0b0000_0100;
+        const PAPER_CUSTOM = 0b0000_1000;
+        const BINARY = 0b0001_0000;
+        const TRANSPARENT = 0b0010_0000;
+        const TBCP = 0b0100_0000;
+    }
+}
+
 /// Supported printer devices.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Device {
@@ -105,26 +124,9 @@ impl Device {
     }
 
     /// Printer capabilities for mDNS advertisement.
-    pub fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            color: false,
-            copies: false,
-            duplex: false,
-            paper_custom: true,
-            binary: true,
-            transparent: false,
-            tbcp: true,
-        }
+    pub const fn capabilities(&self) -> Capabilities {
+        Capabilities::PAPER_CUSTOM
+            .union(Capabilities::BINARY)
+            .union(Capabilities::TBCP)
     }
-}
-
-/// Printer capabilities for mDNS.
-pub struct Capabilities {
-    pub color: bool,
-    pub copies: bool,
-    pub duplex: bool,
-    pub paper_custom: bool,
-    pub binary: bool,
-    pub transparent: bool,
-    pub tbcp: bool,
 }

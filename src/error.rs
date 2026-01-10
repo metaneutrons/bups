@@ -5,7 +5,6 @@
 //! Error types for bups.
 
 #[derive(thiserror::Error, Debug)]
-#[allow(dead_code)]
 pub enum Error {
     #[error("USB error: {0}")]
     Usb(#[from] nusb::Error),
@@ -15,9 +14,6 @@ pub enum Error {
 
     #[error("No printer found")]
     NoPrinter,
-
-    #[error("Unsupported device: PID 0x{0:04x}")]
-    UnsupportedDevice(u16),
 
     #[error("USB transfer error: {0}")]
     Transfer(String),

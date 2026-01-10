@@ -20,38 +20,42 @@ A network print server for Brother PT (P-Touch) and QL label printers. Exposes U
 
 ## Supported Printers
 
+PIDs sourced from [linux-usb.org](http://www.linux-usb.org/usb.ids).
+
 ### PT Series (TZe Tape)
 | Model | PID | Tested |
 |-------|-----|--------|
+| PT-18R | 0x201a | |
 | PT-1230PC | 0x202c | |
+| PT-2420PC | 0x2007 | |
 | PT-2430PC | 0x202d | |
-| PT-D450 | 0x2073 | |
+| PT-2730 | 0x2041 | |
+| PT-7600 | 0x202b | |
 | PT-D600 | 0x2074 | |
 | PT-E550W | 0x2060 | ✅ |
-| PT-E560BT | 0x2203 | |
 | PT-P700 | 0x2061 | |
-| PT-P710BT | 0x20af | |
-| PT-P750W | 0x2062 | |
-| PT-P900W | 0x207c | |
-| PT-P950NW | 0x207d | |
+| PT-P750W | 0x2065 | |
 
 ### QL Series (Labels)
 | Model | PID | Tested |
 |-------|-----|--------|
-| QL-500 | 0x2018 | |
-| QL-550 | 0x2019 | |
-| QL-560 | 0x2015/0x2027 | ✅ |
-| QL-570 | 0x2016/0x2028 | |
-| QL-700 | 0x2017/0x2042 | |
+| QL-500 | 0x2015 | |
+| QL-550 | 0x2016 | |
+| QL-560 | 0x2027 | ✅ |
+| QL-570 | 0x2028 | |
+| QL-600 | 0x20c0 | |
+| QL-650TD | 0x201b | |
+| QL-700 | 0x2042 | |
 | QL-710W | 0x2043 | |
 | QL-720NW | 0x2044 | |
 | QL-800 | 0x209b | |
 | QL-810W | 0x209c | |
 | QL-820NWB | 0x209d | |
-| QL-1050 | 0x2029 | |
+| QL-1050 | 0x2020 | |
 | QL-1060N | 0x202a | |
 | QL-1100 | 0x20a7 | |
 | QL-1110NWB | 0x20a8 | |
+| QL-1115NWB | 0x20ab | |
 
 ## Installation
 

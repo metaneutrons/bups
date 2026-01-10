@@ -103,6 +103,10 @@ struct Args {
     #[arg(short, long, default_value_t = TCP_PORT)]
     port: u16,
 
+    /// SNMP port for status queries
+    #[arg(long, default_value_t = SNMP_PORT)]
+    snmp_port: u16,
+
     /// Enable debug logging
     #[arg(short, long)]
     debug: bool,
@@ -220,7 +224,7 @@ async fn main() {
         mdns_loop(mdns_rx, mdns_args.port, mdns_args.hostname).await;
     });
 
-    let snmp_addr = format!("{}:{}", args.bind.trim_matches(|c| c == '[' || c == ']'), SNMP_PORT);
+    let snmp_addr = format!("{}:{}", args.bind.trim_matches(|c| c == '[' || c == ']'), args.snmp_port);
     let printer_snmp = Arc::clone(&printer);
     tokio::spawn(async move {
         if let Err(e) = server::snmp::serve(&snmp_addr, printer_snmp).await {

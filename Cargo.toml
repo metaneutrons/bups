@@ -8,7 +8,7 @@ repository = "https://github.com/metaneutrons/bups"
 homepage = "https://github.com/metaneutrons/bups"
 keywords = ["label", "print", "server", "usb"]
 authors = ["Fabian Schmieder"]
-rust-version = "1.81"
+rust-version = "1.91"
 
 [build-dependencies]
 vergen-gitcl = { version = "1", features = ["build", "cargo", "rustc"] }

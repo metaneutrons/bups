@@ -1,9 +1,10 @@
 # bups - Brother USB Print Server
 
 [![CI](https://github.com/metaneutrons/bups/actions/workflows/ci.yml/badge.svg)](https://github.com/metaneutrons/bups/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/bups.svg)](https://crates.io/crates/bups)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Rust](https://img.shields.io/badge/Rust-1.74+-orange.svg)](https://www.rust-lang.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)]()
+[![AUR](https://img.shields.io/aur/version/bups)](https://aur.archlinux.org/packages/bups)
 
 A network print server for Brother PT (P-Touch) and QL label printers. Exposes USB-connected printers over the network via TCP port 9100, with mDNS discovery and SNMP status reporting.
 

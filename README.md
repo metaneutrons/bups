@@ -27,6 +27,7 @@ PIDs sourced from [linux-usb.org](http://www.linux-usb.org/usb.ids).
 |-------|-----|--------|
 | PT-18R | 0x201a | |
 | PT-1230PC | 0x202c | |
+| PT-2300/2310 | 0x2004 | |
 | PT-2420PC | 0x2007 | |
 | PT-2430PC | 0x202d | |
 | PT-2730 | 0x2041 | |

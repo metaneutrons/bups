@@ -28,6 +28,7 @@ pub enum Device {
     // PT Series (TZe tape)
     Pt18R,
     Pt1230Pc,
+    Pt2300,
     Pt2420Pc,
     Pt2430Pc,
     Pt2730,
@@ -63,6 +64,7 @@ impl Device {
             // PT Series
             0x201a => Some(Self::Pt18R),
             0x202c => Some(Self::Pt1230Pc),
+            0x2004 => Some(Self::Pt2300),
             0x2007 => Some(Self::Pt2420Pc),
             0x202d => Some(Self::Pt2430Pc),
             0x2041 => Some(Self::Pt2730),
@@ -98,6 +100,7 @@ impl Device {
         match self {
             Self::Pt18R => "PT-18R",
             Self::Pt1230Pc => "PT-1230PC",
+            Self::Pt2300 => "PT-2300/2310",
             Self::Pt2420Pc => "PT-2420PC",
             Self::Pt2430Pc => "PT-2430PC",
             Self::Pt2730 => "PT-2730",

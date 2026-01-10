@@ -96,6 +96,7 @@ Usage: bups [OPTIONS]
 
 Options:
   -p, --port <PORT>                  TCP port for print data [default: 9100]
+      --snmp-port <SNMP_PORT>        SNMP port for status queries [default: 161]
   -d, --debug                        Enable debug logging
   -b, --bind <BIND>                  Bind address [default: [::]]
       --model <MODEL>                Filter by model name (e.g. PT-E550W)

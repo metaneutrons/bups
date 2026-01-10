@@ -1,0 +1,25 @@
+# Build artifacts
+/target/
+
+# IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Debug
+*.pdb
+
+# Node.js (commitlint/husky)
+node_modules/
+package-lock.json

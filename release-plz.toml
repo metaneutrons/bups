@@ -1,0 +1,8 @@
+[workspace]
+changelog_config = "cliff.toml"
+
+[[package]]
+name = "bups"
+changelog_include = ["feat", "fix", "docs", "perf", "refactor"]
+git_release_enable = false
+publish = false

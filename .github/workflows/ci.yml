@@ -72,11 +72,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   msrv:
-    name: MSRV (1.74)
+    name: MSRV (1.78)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.78
       - uses: Swatinem/rust-cache@v2
       - name: Install libudev
         run: sudo apt-get update && sudo apt-get install -y libudev-dev

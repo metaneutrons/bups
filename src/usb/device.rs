@@ -10,7 +10,7 @@ use bitflags::bitflags;
 
 bitflags! {
     /// Printer capabilities for mDNS advertisement.
-    /// 
+    ///
     /// Currently all supported printers share the same capabilities,
     /// but this allows per-device customization when new models are added.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]

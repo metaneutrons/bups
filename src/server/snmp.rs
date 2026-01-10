@@ -13,8 +13,8 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
 use rasn::types::{Integer, ObjectIdentifier, OctetString};
-use rasn_snmp::v1::{GetRequest, GetResponse, Message, Pdu, Pdus, VarBind};
 use rasn_smi::v1::{ObjectSyntax, SimpleSyntax};
+use rasn_snmp::v1::{GetRequest, GetResponse, Message, Pdu, Pdus, VarBind};
 
 use crate::config::{BROTHER_STATUS_OID, SNMP_BUFFER_SIZE};
 use crate::error::Result;
@@ -66,7 +66,7 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
                 Err(_) => None, // Printer busy
             }
         };
-        
+
         // Skip response if no status available (printer busy)
         let Some(status_bytes) = status_bytes else {
             continue;
@@ -82,9 +82,9 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
                 error_index: Integer::from(0),
                 variable_bindings: vec![VarBind {
                     name: brother_oid.clone(),
-                    value: ObjectSyntax::Simple(SimpleSyntax::String(
-                        OctetString::from(status_bytes),
-                    )),
+                    value: ObjectSyntax::Simple(SimpleSyntax::String(OctetString::from(
+                        status_bytes,
+                    ))),
                 }],
             }),
         };

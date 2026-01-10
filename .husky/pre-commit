@@ -1,2 +1,2 @@
-cargo fmt --check
-cargo clippy -- -D warnings
+#!/bin/sh
+cargo fmt

@@ -8,4 +8,4 @@ pub mod device;
 pub mod printer;
 
 pub use device::Device;
-pub use printer::{Printer, list_printers};
+pub use printer::{list_printers, Printer};

@@ -8,11 +8,10 @@
 //! Status format documented in Brother Raster Command Reference.
 
 use crate::config::{
-    STATUS_MAGIC, USB_READ_SIZE, STATUS_OFF_ERROR1, STATUS_OFF_ERROR2, STATUS_OFF_MEDIA_WIDTH,
-    STATUS_OFF_MEDIA_TYPE, STATUS_OFF_STATUS_TYPE, STATUS_OFF_PHASE,
-    STATUS_OFF_TAPE_COLOR, STATUS_OFF_TEXT_COLOR,
-    ERR1_NO_MEDIA, ERR1_CUTTER_JAM, ERR1_WEAK_BATTERY, ERR1_HIGH_VOLTAGE,
-    ERR2_WRONG_MEDIA, ERR2_COVER_OPEN, ERR2_OVERHEATING,
+    ERR1_CUTTER_JAM, ERR1_HIGH_VOLTAGE, ERR1_NO_MEDIA, ERR1_WEAK_BATTERY, ERR2_COVER_OPEN,
+    ERR2_OVERHEATING, ERR2_WRONG_MEDIA, STATUS_MAGIC, STATUS_OFF_ERROR1, STATUS_OFF_ERROR2,
+    STATUS_OFF_MEDIA_TYPE, STATUS_OFF_MEDIA_WIDTH, STATUS_OFF_PHASE, STATUS_OFF_STATUS_TYPE,
+    STATUS_OFF_TAPE_COLOR, STATUS_OFF_TEXT_COLOR, USB_READ_SIZE,
 };
 
 /// Parsed printer status (32-byte response).
@@ -49,13 +48,27 @@ impl Status {
 
     /// Get error message if any.
     pub fn error_message(&self) -> Option<&'static str> {
-        if self.error1 & ERR1_NO_MEDIA != 0 { return Some("No media"); }
-        if self.error1 & ERR1_CUTTER_JAM != 0 { return Some("Cutter jam"); }
-        if self.error1 & ERR1_WEAK_BATTERY != 0 { return Some("Weak battery"); }
-        if self.error1 & ERR1_HIGH_VOLTAGE != 0 { return Some("High voltage"); }
-        if self.error2 & ERR2_WRONG_MEDIA != 0 { return Some("Wrong media"); }
-        if self.error2 & ERR2_COVER_OPEN != 0 { return Some("Cover open"); }
-        if self.error2 & ERR2_OVERHEATING != 0 { return Some("Overheating"); }
+        if self.error1 & ERR1_NO_MEDIA != 0 {
+            return Some("No media");
+        }
+        if self.error1 & ERR1_CUTTER_JAM != 0 {
+            return Some("Cutter jam");
+        }
+        if self.error1 & ERR1_WEAK_BATTERY != 0 {
+            return Some("Weak battery");
+        }
+        if self.error1 & ERR1_HIGH_VOLTAGE != 0 {
+            return Some("High voltage");
+        }
+        if self.error2 & ERR2_WRONG_MEDIA != 0 {
+            return Some("Wrong media");
+        }
+        if self.error2 & ERR2_COVER_OPEN != 0 {
+            return Some("Cover open");
+        }
+        if self.error2 & ERR2_OVERHEATING != 0 {
+            return Some("Overheating");
+        }
         None
     }
 }

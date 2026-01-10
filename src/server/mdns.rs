@@ -15,7 +15,12 @@ use crate::usb::device::Capabilities;
 use crate::usb::Device;
 
 /// Advertise printer via mDNS.
-pub fn advertise(device: Device, serial: &str, port: u16, hostname: Option<&str>) -> Option<ServiceDaemon> {
+pub fn advertise(
+    device: Device,
+    serial: &str,
+    port: u16,
+    hostname: Option<&str>,
+) -> Option<ServiceDaemon> {
     let mdns = match ServiceDaemon::new() {
         Ok(d) => d,
         Err(e) => {
@@ -24,12 +29,14 @@ pub fn advertise(device: Device, serial: &str, port: u16, hostname: Option<&str>
         }
     };
 
-    let local_ip = local_ip_address::local_ip()
-        .map_or_else(|_| "127.0.0.1".to_string(), |ip| ip.to_string());
+    let local_ip =
+        local_ip_address::local_ip().map_or_else(|_| "127.0.0.1".to_string(), |ip| ip.to_string());
 
     let model = device.model_name();
-    let hostname = hostname
-        .map_or_else(|| format!("BRN{}", serial.replace(['-', ':'], "").to_uppercase()), |h| h.to_string());
+    let hostname = hostname.map_or_else(
+        || format!("BRN{}", serial.replace(['-', ':'], "").to_uppercase()),
+        |h| h.to_string(),
+    );
     let service_name = format!("bups {model}");
     let caps = device.capabilities();
     let tf = |c: Capabilities| if caps.contains(c) { "T" } else { "F" };

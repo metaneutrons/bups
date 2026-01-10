@@ -14,7 +14,9 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
-use crate::config::{POST_WRITE_DELAY_MS, TCP_BUFFER_SIZE, USB_READ_SIZE, STATUS_OFF_STATUS_TYPE, STATUS_OFF_PHASE};
+use crate::config::{
+    POST_WRITE_DELAY_MS, STATUS_OFF_PHASE, STATUS_OFF_STATUS_TYPE, TCP_BUFFER_SIZE, USB_READ_SIZE,
+};
 use crate::error::Result;
 use crate::status::Status;
 use crate::usb::Printer;
@@ -41,7 +43,10 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
     }
 }
 
-async fn handle_connection(mut stream: TcpStream, printer: Arc<Mutex<Option<Printer>>>) -> Result<()> {
+async fn handle_connection(
+    mut stream: TcpStream,
+    printer: Arc<Mutex<Option<Printer>>>,
+) -> Result<()> {
     let mut buf = [0u8; TCP_BUFFER_SIZE];
     let mut last_status = [0u8; USB_READ_SIZE];
 
@@ -73,13 +78,17 @@ async fn handle_connection(mut stream: TcpStream, printer: Arc<Mutex<Option<Prin
             let _ = stream.write_all(b"ERROR: USB write failed\n").await;
             continue;
         }
-        
+
         // Try to read status, cache last good one
         tokio::time::sleep(Duration::from_millis(POST_WRITE_DELAY_MS)).await;
         let read_ok = if let Ok(raw) = p.read_raw().await {
             debug!(raw = ?&raw[..8], "raw status bytes");
             if let Some(s) = Status::parse(raw) {
-                debug!(status_type = raw[STATUS_OFF_STATUS_TYPE], phase = raw[STATUS_OFF_PHASE], "printer status");
+                debug!(
+                    status_type = raw[STATUS_OFF_STATUS_TYPE],
+                    phase = raw[STATUS_OFF_PHASE],
+                    "printer status"
+                );
                 if s.error_message().is_some() {
                     warn!(error = ?s.error_message(), "printer error");
                 }
@@ -95,7 +104,7 @@ async fn handle_connection(mut stream: TcpStream, printer: Arc<Mutex<Option<Prin
             false
         };
         drop(guard);
-        
+
         // Always send status (last good or cached)
         trace!(status = ?&last_status[..], fresh = read_ok, "sending status to client");
         let _ = stream.write_all(&last_status).await;
@@ -107,7 +116,7 @@ async fn handle_connection(mut stream: TcpStream, printer: Arc<Mutex<Option<Prin
 
 async fn handle_command(data: &[u8], printer: &Arc<Mutex<Option<Printer>>>) -> Option<String> {
     let cmd = std::str::from_utf8(data).ok()?.trim().to_uppercase();
-    
+
     match cmd.as_str() {
         "STATUS" => {
             let guard = printer.lock().await;

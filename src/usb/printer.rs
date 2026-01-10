@@ -7,17 +7,17 @@
 //! Handles device detection, connection, and bidirectional data transfer.
 //! Uses chunked writes (4KB) for compatibility with QL printers' smaller USB buffers.
 
+use nusb::transfer::{Bulk, In, Out};
+use nusb::Endpoint;
+use nusb::MaybeFuture;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
-use nusb::Endpoint;
-use nusb::transfer::{Bulk, In, Out};
-use nusb::MaybeFuture;
 use tracing::{debug, trace, warn};
 
 use crate::config::{
-    BROTHER_VENDOR_ID, INIT_CMD, INVALIDATE_CMD, STATUS_MAGIC, STATUS_REQUEST,
-    USB_EP_IN, USB_EP_OUT, USB_READ_BUFFER, USB_READ_RETRIES, USB_READ_SIZE,
-    USB_READ_TIMEOUT_MS, USB_STATUS_DELAY_MS, USB_TIMEOUT_MS,
+    BROTHER_VENDOR_ID, INIT_CMD, INVALIDATE_CMD, STATUS_MAGIC, STATUS_REQUEST, USB_EP_IN,
+    USB_EP_OUT, USB_READ_BUFFER, USB_READ_RETRIES, USB_READ_SIZE, USB_READ_TIMEOUT_MS,
+    USB_STATUS_DELAY_MS, USB_TIMEOUT_MS,
 };
 use crate::error::{Error, Result};
 use crate::usb::Device;
@@ -39,7 +39,7 @@ pub fn list_printers() -> Vec<(&'static str, String)> {
 }
 
 /// USB printer handle.
-/// 
+///
 /// Note: Uses std::sync::Mutex because nusb operations are blocking anyway.
 /// USB operations are wrapped in spawn_blocking when called from async context.
 pub struct Printer {
@@ -102,9 +102,11 @@ impl Printer {
         let usb_device = dev_info.open().wait().map_err(Error::Usb)?;
         let interface = usb_device.claim_interface(0).wait().map_err(Error::Usb)?;
 
-        let ep_out = interface.endpoint::<Bulk, Out>(USB_EP_OUT)
+        let ep_out = interface
+            .endpoint::<Bulk, Out>(USB_EP_OUT)
             .map_err(|e| Error::Transfer(e.to_string()))?;
-        let ep_in = interface.endpoint::<Bulk, In>(USB_EP_IN)
+        let ep_in = interface
+            .endpoint::<Bulk, In>(USB_EP_IN)
             .map_err(|e| Error::Transfer(e.to_string()))?;
 
         let printer = Self {
@@ -140,17 +142,19 @@ impl Printer {
     }
 
     /// Write data to printer (chunked for QL compatibility).
-    /// 
+    ///
     /// Note: Kept as async for API consistency, though USB ops are blocking.
     pub async fn write(&self, data: &[u8]) -> Result<()> {
         const CHUNK_SIZE: usize = 4096; // QL printers have smaller USB buffers
         let mut ep = self.ep_out.lock().unwrap();
-        
+
         for chunk in data.chunks(CHUNK_SIZE) {
             trace!(len = chunk.len(), "USB write");
             ep.submit(chunk.to_vec().into());
             match ep.wait_next_complete(Duration::from_millis(USB_TIMEOUT_MS)) {
-                Some(c) if c.status.is_err() => return Err(Error::Transfer(format!("{:?}", c.status))),
+                Some(c) if c.status.is_err() => {
+                    return Err(Error::Transfer(format!("{:?}", c.status)))
+                }
                 None => return Err(Error::Transfer("USB write timeout".into())),
                 _ => {}
             }
@@ -159,14 +163,14 @@ impl Printer {
     }
 
     /// Read raw data from printer without sending status request.
-    /// 
+    ///
     /// Note: Kept as async for API consistency, though USB ops are blocking.
     pub async fn read_raw(&self) -> Result<[u8; USB_READ_SIZE]> {
         let mut ep_in = self.ep_in.lock().unwrap();
-        
+
         // Clear any halt condition
         let _ = ep_in.clear_halt();
-        
+
         for attempt in 0..USB_READ_RETRIES {
             ep_in.submit(vec![0u8; USB_READ_BUFFER].into());
             match ep_in.wait_next_complete(Duration::from_millis(USB_READ_TIMEOUT_MS)) {
@@ -191,7 +195,7 @@ impl Printer {
     }
 
     /// Read status from printer (sends status request first).
-    /// 
+    ///
     /// Note: Kept as async for API consistency, though USB ops are blocking.
     pub async fn read(&self) -> Result<[u8; USB_READ_SIZE]> {
         self.write(&STATUS_REQUEST).await?;

@@ -15,18 +15,18 @@ mod server;
 mod status;
 mod usb;
 
+use clap::Parser;
 use std::sync::Arc;
 use std::time::Duration;
-use clap::Parser;
-use tokio::sync::Mutex;
 use tokio::signal;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
-use config::{DEFAULT_MAX_RECONNECT_ATTEMPTS, DEFAULT_RECONNECT_INTERVAL, TCP_PORT, SNMP_PORT};
-use usb::{Printer, list_printers};
+use config::{DEFAULT_MAX_RECONNECT_ATTEMPTS, DEFAULT_RECONNECT_INTERVAL, SNMP_PORT, TCP_PORT};
+use usb::{list_printers, Printer};
 
 fn init_stderr_logging(env_filter: EnvFilter) {
     tracing_subscriber::registry()
@@ -37,7 +37,7 @@ fn init_stderr_logging(env_filter: EnvFilter) {
 
 #[cfg(unix)]
 fn init_syslog_logging(env_filter: EnvFilter) {
-    use syslog_tracing::{Syslog, Options, Facility};
+    use syslog_tracing::{Facility, Options, Syslog};
 
     let identity = c"bups";
     let options = Options::LOG_PID | Options::LOG_NDELAY;
@@ -50,7 +50,7 @@ fn init_syslog_logging(env_filter: EnvFilter) {
                     tracing_subscriber::fmt::layer()
                         .with_writer(syslog)
                         .with_ansi(false)
-                        .without_time()
+                        .without_time(),
                 )
                 .init();
         }
@@ -97,7 +97,11 @@ impl Drop for PidFileGuard {
 }
 
 #[derive(Parser, Clone)]
-#[command(name = "bups", about = "bups - the print server for USB-based label printers")]
+#[command(
+    name = "bups",
+    about = "bups - the print server for USB-based label printers",
+    version
+)]
 struct Args {
     /// TCP port for print data
     #[arg(short, long, default_value_t = TCP_PORT)]
@@ -153,9 +157,13 @@ async fn main() {
     let args = Args::parse();
 
     // Initialize logging
-    let default_filter = if args.debug { "bups=debug" } else { "bups=info" };
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(default_filter));
+    let default_filter = if args.debug {
+        "bups=debug"
+    } else {
+        "bups=info"
+    };
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
 
     if args.syslog {
         #[cfg(unix)]
@@ -189,22 +197,23 @@ async fn main() {
         None
     };
 
-    info!("bups starting");
+    info!("bups {} starting", env!("CARGO_PKG_VERSION"));
 
-    let printer: Arc<Mutex<Option<Printer>>> = match Printer::open(args.model.as_deref(), args.serial.as_deref()) {
-        Ok(p) => {
-            info!(
-                model = p.device().model_name(),
-                serial = p.serial(),
-                "printer connected"
-            );
-            Arc::new(Mutex::new(Some(p)))
-        }
-        Err(e) => {
-            warn!(error = %e, "no printer found, waiting for connection");
-            Arc::new(Mutex::new(None))
-        }
-    };
+    let printer: Arc<Mutex<Option<Printer>>> =
+        match Printer::open(args.model.as_deref(), args.serial.as_deref()) {
+            Ok(p) => {
+                info!(
+                    model = p.device().model_name(),
+                    serial = p.serial(),
+                    "printer connected"
+                );
+                Arc::new(Mutex::new(Some(p)))
+            }
+            Err(e) => {
+                warn!(error = %e, "no printer found, waiting for connection");
+                Arc::new(Mutex::new(None))
+            }
+        };
 
     // Channel for mDNS re-advertisement
     let (mdns_tx, mdns_rx) = tokio::sync::watch::channel::<Option<(usb::Device, String)>>({
@@ -224,7 +233,11 @@ async fn main() {
         mdns_loop(mdns_rx, mdns_args.port, mdns_args.hostname).await;
     });
 
-    let snmp_addr = format!("{}:{}", args.bind.trim_matches(|c| c == '[' || c == ']'), args.snmp_port);
+    let snmp_addr = format!(
+        "{}:{}",
+        args.bind.trim_matches(|c| c == '[' || c == ']'),
+        args.snmp_port
+    );
     let printer_snmp = Arc::clone(&printer);
     tokio::spawn(async move {
         if let Err(e) = server::snmp::serve(&snmp_addr, printer_snmp).await {
@@ -233,7 +246,7 @@ async fn main() {
     });
 
     let tcp_addr = format!("{}:{}", args.bind, args.port);
-    
+
     tokio::select! {
         result = server::tcp::serve(&tcp_addr, printer) => {
             if let Err(e) = result {
@@ -244,13 +257,15 @@ async fn main() {
             info!("shutdown signal received");
         }
     }
-    
+
     info!("bups stopped");
 }
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]
@@ -356,11 +371,11 @@ async fn mdns_loop(
     hostname: Option<String>,
 ) {
     use mdns_sd::ServiceDaemon;
-    
+
     // Keep ServiceDaemon alive - dropping it unregisters the service
     let mut _mdns: Option<ServiceDaemon> = None;
     let mut current: Option<(usb::Device, String)> = None;
-    
+
     // Handle initial value
     {
         let value = rx.borrow_and_update().clone();
@@ -369,20 +384,20 @@ async fn mdns_loop(
             current = value;
         }
     }
-    
+
     // Handle changes
     while rx.changed().await.is_ok() {
         let value = rx.borrow().clone();
-        
+
         // Skip if unchanged
         if value == current {
             continue;
         }
         current = value.clone();
-        
+
         // Drop old advertisement
         _mdns = None;
-        
+
         // Create new advertisement if printer connected
         if let Some((device, ref serial)) = value {
             _mdns = server::mdns::advertise(device, serial, port, hostname.as_deref());

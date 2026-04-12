@@ -2,7 +2,7 @@
 name = "bups"
 version = "0.1.1"
 edition = "2024"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later"
 description = "bups - the print server for USB-based label printers"
 repository = "https://github.com/metaneutrons/bups"
 homepage = "https://github.com/metaneutrons/bups"
@@ -10,6 +10,7 @@ keywords = ["label", "print", "server", "usb"]
 categories = ["hardware-support", "network-programming"]
 authors = ["Fabian Schmieder"]
 rust-version = "1.85"
+publish = false
 
 [lints.rust]
 unsafe_code = "deny"

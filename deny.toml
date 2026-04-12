@@ -1,6 +1,9 @@
 [advisories]
 version = 2
-ignore = []
+ignore = [
+    # time 0.3.47 requires Rust 1.88+; only used at build-time by vergen-gitcl
+    "RUSTSEC-2026-0009",
+]
 
 [licenses]
 version = 2
@@ -12,6 +15,7 @@ allow = [
     "ISC",
     "MPL-2.0",
     "GPL-3.0",
+    "GPL-3.0-or-later",
     "Zlib",
     "Unicode-3.0",
     "Unicode-DFS-2016",

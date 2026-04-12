@@ -4,23 +4,23 @@
 
 //! SNMP responder for printer status queries.
 //!
-//! Responds to Brother-specific OID (1.3.6.1.4.1.2435.3.3.9.1.6.1.0)
-//! with raw 32-byte printer status.
+//! Responds to the Brother-specific OID (`1.3.6.1.4.1.2435.3.3.9.1.6.1.0`)
+//! with the raw 32-byte printer status.
 
 use std::sync::Arc;
-use tokio::net::UdpSocket;
-use tokio::sync::Mutex;
-use tracing::{debug, error, info};
 
 use rasn::types::{Integer, ObjectIdentifier, OctetString};
 use rasn_smi::v1::{ObjectSyntax, SimpleSyntax};
 use rasn_snmp::v1::{GetRequest, GetResponse, Message, Pdu, Pdus, VarBind};
+use tokio::net::UdpSocket;
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 
 use crate::config::{BROTHER_STATUS_OID, SNMP_BUFFER_SIZE};
 use crate::error::Result;
 use crate::usb::Printer;
 
-/// Start SNMP responder on given address.
+/// Start SNMP responder on the given address.
 pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<()> {
     let socket = UdpSocket::bind(addr).await?;
     info!(addr = %addr, "SNMP responder listening");
@@ -39,40 +39,37 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
 
         debug!(src = %src, len, "SNMP request");
 
-        // Decode request
-        let Ok(msg) = rasn::ber::decode::<Message<Pdus>>(&buf[..len]) else {
-            continue;
-        };
-
-        let Pdus::GetRequest(GetRequest(pdu)) = msg.data else {
-            continue;
-        };
-
-        // Log requested OID
-        if let Some(vb) = pdu.variable_bindings.first() {
-            debug!(oid = ?vb.name, "SNMP requested OID");
-        }
-
-        // Get printer status - use try_lock to avoid blocking during print jobs
-        let status_bytes = {
-            match printer.try_lock() {
-                Ok(guard) => {
-                    if let Some(ref p) = *guard {
-                        p.read().await.ok().map(|s| s.to_vec())
-                    } else {
-                        None
-                    }
-                }
-                Err(_) => None, // Printer busy
+        let msg = match rasn::ber::decode::<Message<Pdus>>(&buf[..len]) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!(src = %src, error = %e, "malformed SNMP request");
+                continue;
             }
         };
 
-        // Skip response if no status available (printer busy)
-        let Some(status_bytes) = status_bytes else {
+        let Pdus::GetRequest(GetRequest(pdu)) = msg.data else {
+            debug!(src = %src, "ignoring non-GET SNMP request");
             continue;
         };
 
-        // Build response
+        if let Some(vb) = pdu.variable_bindings.first() {
+            debug!(oid = ?vb.name, "requested OID");
+        }
+
+        // Use try_lock to avoid blocking during print jobs.
+        let status_bytes = match printer.try_lock() {
+            Ok(guard) => match *guard {
+                Some(ref p) => p.read().await.ok().map(|s| s.to_vec()),
+                None => None,
+            },
+            Err(_) => None,
+        };
+
+        let Some(status_bytes) = status_bytes else {
+            debug!(src = %src, "printer busy or absent, skipping response");
+            continue;
+        };
+
         let response = Message {
             version: Integer::from(0),
             community: msg.community,

@@ -1,2 +1,4 @@
 #!/bin/sh
-cargo fmt
+set -e
+cargo fmt --check || { echo "Run 'cargo fmt' to fix formatting"; exit 1; }
+cargo clippy --all-targets --all-features -- -D warnings || { echo "Fix clippy warnings"; exit 1; }

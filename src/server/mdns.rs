@@ -4,17 +4,18 @@
 
 //! mDNS/Bonjour service advertisement.
 //!
-//! Advertises printer as `_pdl-datastream._tcp` for automatic discovery
+//! Advertises the printer as `_pdl-datastream._tcp` for automatic discovery
 //! by macOS, iOS, and other Bonjour-aware clients.
 
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use tracing::{error, info};
 
 use crate::config::{BROTHER_PDL, MDNS_SERVICE_TYPE};
-use crate::usb::device::Capabilities;
 use crate::usb::Device;
+use crate::usb::device::Capabilities;
 
-/// Advertise printer via mDNS.
+/// Advertise a printer via mDNS. Returns the daemon handle (dropping it
+/// unregisters the service).
 pub fn advertise(
     device: Device,
     serial: &str,
@@ -30,12 +31,12 @@ pub fn advertise(
     };
 
     let local_ip =
-        local_ip_address::local_ip().map_or_else(|_| "127.0.0.1".to_string(), |ip| ip.to_string());
+        local_ip_address::local_ip().map_or_else(|_| "127.0.0.1".to_owned(), |ip| ip.to_string());
 
     let model = device.model_name();
     let hostname = hostname.map_or_else(
         || format!("BRN{}", serial.replace(['-', ':'], "").to_uppercase()),
-        |h| h.to_string(),
+        ToString::to_string,
     );
     let service_name = format!("bups {model}");
     let caps = device.capabilities();
@@ -79,9 +80,53 @@ pub fn advertise(
     };
 
     match mdns.register(service) {
-        Ok(_) => info!(name = %service_name, ip = %local_ip, port, "mDNS registered"),
+        Ok(()) => {
+            info!(
+                name = %service_name,
+                ip = %local_ip,
+                port,
+                "mDNS registered"
+            );
+        }
         Err(e) => error!(error = %e, "mDNS registration failed"),
     }
 
     Some(mdns)
+}
+
+/// Run the mDNS re-advertisement loop.
+///
+/// Re-advertises whenever the printer changes (connect / disconnect).
+pub async fn mdns_loop(
+    mut rx: tokio::sync::watch::Receiver<Option<(Device, String)>>,
+    port: u16,
+    hostname: Option<String>,
+) {
+    // The daemon handle must be kept alive — dropping it unregisters the service.
+    #[allow(clippy::collection_is_never_read)]
+    let mut _mdns: Option<ServiceDaemon> = None;
+    let mut current: Option<(Device, String)> = None;
+
+    // Handle initial value.
+    {
+        let value = rx.borrow_and_update().clone();
+        if let Some((device, ref serial)) = value {
+            _mdns = advertise(device, serial, port, hostname.as_deref());
+            current = value;
+        }
+    }
+
+    while rx.changed().await.is_ok() {
+        let value = rx.borrow().clone();
+        if value == current {
+            continue;
+        }
+        current.clone_from(&value);
+
+        // Drop old advertisement, create new one if printer connected.
+        _mdns = None;
+        if let Some((device, ref serial)) = value {
+            _mdns = advertise(device, serial, port, hostname.as_deref());
+        }
+    }
 }

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Fabian Schmieder
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Server module.
+//! Network server modules.
 
 pub mod mdns;
 pub mod snmp;

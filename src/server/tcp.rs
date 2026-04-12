@@ -4,24 +4,23 @@
 
 //! TCP print server (port 9100).
 //!
-//! Accepts raw print data and forwards to USB printer.
+//! Accepts raw print data and forwards it to the USB printer.
 //! Returns 32-byte status responses after each write (Brother protocol).
 
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::config::{
-    POST_WRITE_DELAY_MS, STATUS_OFF_PHASE, STATUS_OFF_STATUS_TYPE, TCP_BUFFER_SIZE, USB_READ_SIZE,
-};
+use crate::config::{POST_WRITE_DELAY_MS, TCP_BUFFER_SIZE, USB_READ_SIZE};
 use crate::error::Result;
 use crate::status::Status;
 use crate::usb::Printer;
 
-/// Start TCP server on given address.
+/// Start TCP server on the given address.
 pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<()> {
     let listener = TcpListener::bind(addr).await?;
     info!(addr = %addr, "TCP server listening");
@@ -33,7 +32,6 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
                 let printer = Arc::clone(&printer);
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(stream, printer).await {
-                        // TODO: investigate if connection reset is normal P-Touch behavior
                         debug!(error = %e, "connection closed");
                     }
                 });
@@ -43,6 +41,7 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
     }
 }
 
+#[instrument(skip_all, fields(peer = %stream.peer_addr().map_or_else(|_| "unknown".into(), |a| a.to_string())))]
 async fn handle_connection(
     mut stream: TcpStream,
     printer: Arc<Mutex<Option<Printer>>>,
@@ -53,13 +52,13 @@ async fn handle_connection(
     loop {
         let n = stream.read(&mut buf).await?;
         if n == 0 {
-            debug!("connection closed");
+            debug!("client disconnected");
             break;
         }
 
         debug!(bytes = n, "received data");
 
-        // Check for text commands
+        // Check for text commands.
         if let Some(response) = handle_command(&buf[..n], &printer).await {
             let _ = stream.write_all(response.as_bytes()).await;
             continue;
@@ -71,7 +70,7 @@ async fn handle_connection(
             continue;
         };
 
-        // Write to printer
+        // Write to printer.
         if let Err(e) = p.write(&buf[..n]).await {
             error!(error = %e, "USB write failed");
             drop(guard);
@@ -79,34 +78,22 @@ async fn handle_connection(
             continue;
         }
 
-        // Try to read status, cache last good one
+        // Read status after write; cache last good response.
         tokio::time::sleep(Duration::from_millis(POST_WRITE_DELAY_MS)).await;
-        let read_ok = if let Ok(raw) = p.read_raw().await {
-            debug!(raw = ?&raw[..8], "raw status bytes");
+        if let Ok(raw) = p.read_raw().await {
             if let Some(s) = Status::parse(raw) {
-                debug!(
-                    status_type = raw[STATUS_OFF_STATUS_TYPE],
-                    phase = raw[STATUS_OFF_PHASE],
-                    "printer status"
-                );
-                if s.error_message().is_some() {
-                    warn!(error = ?s.error_message(), "printer error");
+                debug!(status = %s, "printer status");
+                if s.has_error() {
+                    warn!(errors = ?s.errors(), "printer error");
                 }
             }
             last_status = raw;
-            true
         } else {
-            // FIXME: nusb can't read status after print command - workaround by faking ready status
-            if n <= 4 && last_status[STATUS_OFF_STATUS_TYPE] == 6 {
-                last_status[STATUS_OFF_STATUS_TYPE] = 0; // Set status_type to ready
-                last_status[STATUS_OFF_PHASE] = 0; // Set phase to 0
-            }
-            false
-        };
+            trace!("no fresh status, sending cached");
+        }
         drop(guard);
 
-        // Always send status (last good or cached)
-        trace!(status = ?&last_status[..], fresh = read_ok, "sending status to client");
+        // Always send status (fresh or cached) to client.
         let _ = stream.write_all(&last_status).await;
         let _ = stream.flush().await;
     }
@@ -123,25 +110,37 @@ async fn handle_command(data: &[u8], printer: &Arc<Mutex<Option<Printer>>>) -> O
             let Some(ref p) = *guard else {
                 return Some("STATUS: No printer connected\n".into());
             };
-            match p.read().await {
-                Ok(raw) => {
-                    if let Some(s) = Status::parse(raw) {
-                        let status = if s.error_message().is_some() { "ERROR" } else { "READY" };
-                        let model = p.device().model_name();
-                        let error = s.error_message().unwrap_or("None");
-                        Some(format!(
-                            "STATUS: {status}\nModel: {model}\nMedia: {}mm\nError: {error}\n",
-                            s.media_width
-                        ))
-                    } else {
-                        Some("STATUS: Unknown\n".into())
-                    }
-                }
-                Err(_) => Some("STATUS: Read failed\n".into()),
-            }
+            let model = p.device().model_name();
+            let result = p.read().await;
+            drop(guard);
+
+            result.map_or_else(
+                |_| Some("STATUS: Read failed\n".into()),
+                |raw| {
+                    Status::parse(raw).map_or_else(
+                        || Some("STATUS: Unknown\n".into()),
+                        |s| {
+                            let label = if s.has_error() { "ERROR" } else { "READY" };
+                            let errors = s.errors();
+                            let error_str = if errors.is_empty() {
+                                "None".to_owned()
+                            } else {
+                                errors.join(", ")
+                            };
+                            Some(format!(
+                                "STATUS: {label}\nModel: {model}\n\
+                                 Media: {}mm\nError: {error_str}\n",
+                                s.media_width
+                            ))
+                        },
+                    )
+                },
+            )
         }
         "HELP" => Some(
-            "Commands:\n  STATUS - Get printer status\n  HELP   - Show this help\n  <data> - Send raw print data\n".into()
+            "Commands:\n  STATUS - Get printer status\n  \
+             HELP   - Show this help\n  <data> - Send raw print data\n"
+                .into(),
         ),
         _ => None,
     }

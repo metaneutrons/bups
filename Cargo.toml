@@ -24,7 +24,7 @@ cargo = { level = "warn", priority = -1 }
 multiple_crate_versions = "allow"
 
 [build-dependencies]
-vergen-gitcl = { version = "1", features = ["build", "cargo", "rustc"] }
+vergen-gitcl = { version = "9", features = ["build", "cargo", "rustc"] }
 
 [dependencies]
 nusb = "0.2"
@@ -33,7 +33,7 @@ tokio-stream = "0.1"
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-mdns-sd = "0.17"
+mdns-sd = "0.19"
 local-ip-address = "0.6"
 rasn = "0.28"
 rasn-snmp = "0.28"

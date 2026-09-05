@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.5](https://github.com/metaneutrons/bups/compare/v0.3.4...v0.3.5) (2026-09-05)
+
+
+### Bug Fixes
+
+* **mdns:** retire an advertisement instead of dropping a handle ([#50](https://github.com/metaneutrons/bups/issues/50)) ([b1530c5](https://github.com/metaneutrons/bups/commit/b1530c5395e8fa95fc598b219b48a297048d1175))
+* **release:** make a payload that cannot name its commit fail the build ([#48](https://github.com/metaneutrons/bups/issues/48)) ([72850b5](https://github.com/metaneutrons/bups/commit/72850b513a728195269a40733ed0db605bf3b401))
+* **release:** verify the archive the way an apt client reads it ([#47](https://github.com/metaneutrons/bups/issues/47)) ([bfeda59](https://github.com/metaneutrons/bups/commit/bfeda59c7e930395587dfaf201f6a55ebb8b5bbf))
+
 ## [0.3.4](https://github.com/metaneutrons/bups/compare/v0.3.3...v0.3.4) (2026-09-05)
 
 

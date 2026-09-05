@@ -29,7 +29,7 @@ multiple_crate_versions = "allow"
 tokio = { version = "1", features = ["rt", "macros"] }
 
 [build-dependencies]
-vergen-gitcl = { version = "9", features = ["build", "cargo", "rustc"] }
+vergen-gitcl = { version = "10", features = ["build", "cargo", "rustc"] }
 
 [dependencies]
 nusb = "0.2"

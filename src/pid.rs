@@ -13,12 +13,12 @@ impl PidFileGuard {
     /// Create a PID file at `path`, failing if another instance is running.
     pub fn create(path: &str) -> Result<Self> {
         if let Ok(contents) = std::fs::read_to_string(path) {
-            if let Ok(pid) = contents.trim().parse::<i32>() {
-                if process_exists(pid) {
-                    return Err(Error::PidFile(format!(
-                        "another instance already running (PID {pid})"
-                    )));
-                }
+            if let Ok(pid) = contents.trim().parse::<i32>()
+                && process_exists(pid)
+            {
+                return Err(Error::PidFile(format!(
+                    "another instance already running (PID {pid})"
+                )));
             }
             // Stale PID file — remove it.
             let _ = std::fs::remove_file(path);

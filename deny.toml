@@ -1,9 +1,8 @@
 [advisories]
 version = 2
-ignore = [
-    # time 0.3.47 requires Rust 1.88+; only used at build-time by vergen-gitcl
-    "RUSTSEC-2026-0009",
-]
+# Keine Ignores. RUSTSEC-2026-0009 war nur wirksam, weil rust-version = "1.85"
+# den MSRV-bewussten Resolver (Edition 2024 / Resolver 3) daran hinderte,
+# time >= 0.3.47 zu waehlen. Mit MSRV 1.95 loest der Resolver auf 0.3.55 auf.
 
 [licenses]
 version = 2

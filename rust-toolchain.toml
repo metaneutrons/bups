@@ -1,3 +1,10 @@
+# The only source of the toolchain version: locally, in CI and in the release
+# build. Dependabot keeps it current through package-ecosystem: rust-toolchain.
+#
+# A job that deliberately needs a different toolchain, such as the MSRV check,
+# sets RUSTUP_TOOLCHAIN. That outranks this file; `rustup default`, which
+# dtolnay/rust-toolchain sets, does not.
 [toolchain]
-channel = "stable"
-components = ["rustfmt", "clippy"]
+channel = "1.98.1"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]
+profile = "minimal"

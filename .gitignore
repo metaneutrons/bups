@@ -20,6 +20,6 @@ Thumbs.db
 # Debug
 *.pdb
 
-# Node.js (commitlint/husky)
+# Node.js — no Node in this project any more, but an unanchored guard costs
+# nothing and the pre-commit hook refuses staged node_modules regardless.
 node_modules/
-package-lock.json

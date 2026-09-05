@@ -1,106 +1,187 @@
 name: CI
 
+# No `schedule:` in this file, deliberately. GitHub disables scheduled
+# workflows in public repositories after 60 days without a commit, and it
+# disables the WHOLE file, not just the cron trigger. That happened here: CI
+# was `disabled_inactivity` from mid-August 2026 and neither pushes nor pull
+# requests ran a single check. The weekly advisory scan therefore lives in
+# security-audit.yml, where losing it costs only the scan.
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+  RUST_BACKTRACE: '1'
 
 jobs:
+  quality:
+    name: Format, clippy, licences
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # No dtolnay/rust-toolchain anywhere: the version lives in
+      # rust-toolchain.toml and rustup installs it from there. Two sources
+      # would be a source of error, and the action's `rustup default` loses
+      # against the file anyway.
+      - run: rustup show
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - run: cargo fmt --all -- --check
+      - name: Check the hook configuration
+        env:
+          LEFTHOOK_VERSION: '2.1.12'
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/evilmartians/lefthook/releases/download/v${LEFTHOOK_VERSION}/lefthook_${LEFTHOOK_VERSION}_Linux_x86_64.gz" \
+            | gzip -d > "$RUNNER_TEMP/lefthook"
+          chmod +x "$RUNNER_TEMP/lefthook"
+          "$RUNNER_TEMP/lefthook" validate
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: cargo-deny
+      - run: cargo deny check
+
   test:
-    name: Test
-    runs-on: ${{ matrix.os }}
+    name: Tests (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        rust: [stable, beta]
-    # rust-toolchain.toml hat Vorrang vor `rustup default`, das
-    # dtolnay/rust-toolchain setzt. Ohne RUSTUP_TOOLCHAIN liefe jede
-    # Matrixzeile auf stable, und die beta-Zeilen waeren Duplikate.
-    env:
-      RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
+        include:
+          - { name: linux-x86_64, runner: ubuntu-24.04 }
+          - { name: linux-aarch64, runner: ubuntu-24.04-arm }
+          - { name: macos-aarch64, runner: macos-15 }
+    runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-      - uses: Swatinem/rust-cache@v2
-      - name: Install libudev (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev
-      - run: cargo test --all-features
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Install libudev
+        if: startsWith(matrix.name, 'linux')
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
-
-  deny:
-    name: Cargo Deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: EmbarkStudios/cargo-deny-action@v2
-
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tool: cargo-nextest,cargo-llvm-cov
+      - run: cargo nextest run --workspace --all-features --locked
+      # The floor is measured, not aspirational: 38.30% at the time of writing.
+      # Most of the crate is USB and network I/O that CI has no hardware for;
+      # what is pure -- status parsing and the device table -- sits above 94%.
+      # Raise this as testable surface grows, never lower it.
+      - name: Coverage with a hard floor
+        if: matrix.name == 'linux-x86_64'
+        run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 38
 
   msrv:
     name: MSRV (1.95)
-    runs-on: ubuntu-latest
-    # Ohne RUSTUP_TOOLCHAIN gewinnt rust-toolchain.toml und der Job pruefte
-    # stable. Die MSRV waere dann eine Behauptung ohne Testlauf.
+    runs-on: ubuntu-24.04
+    # RUSTUP_TOOLCHAIN outranks rust-toolchain.toml. Without it this job would
+    # silently check the pinned stable toolchain and the declared MSRV would be
+    # an assertion rather than a tested guarantee.
     env:
-      RUSTUP_TOOLCHAIN: "1.95"
+      RUSTUP_TOOLCHAIN: '1.95'
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.95
-      - uses: Swatinem/rust-cache@v2
-      - name: Install libudev
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev
-      - run: cargo check --all-features
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: rustup toolchain install 1.95 --profile minimal
+      - name: The MSRV must be what actually runs
+        run: |
+          set -euo pipefail
+          rustc --version
+          rustc --version | grep -q '^rustc 1\.95\.' \
+            || { echo "::error::not running the MSRV toolchain"; exit 1; }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - run: cargo check --workspace --all-features --locked
 
-  commitlint:
-    name: Lint Commits
-    runs-on: ubuntu-latest
+  commit-hygiene:
+    name: Commit hygiene
     if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - name: Check title, body and every commit
+        # Title and body reach the script only through env, never by
+        # interpolation into the script text: otherwise a pull request title
+        # would be a shell injection vector.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          status=0
+          cc='^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+|Revert ".+")'
+          # grep works line by line, hence .* and not [^\n]*: in ERE [^\n] is
+          # the class "neither a backslash nor an n" and would exclude names
+          # containing an 'n'. Anchored at the start of the line, because a
+          # trailer stands on a line of its own; without the anchor the rule
+          # also fires when a body merely mentions the forbidden trailer.
+          ban='^[[:space:]]*co-authored-by:.*(claude|anthropic)|^[[:space:]]*generated with.*claude code'
+
+          # On a squash merge the pull request title becomes the subject line
+          # on main and thereby determines the next version.
+          if ! printf '%s' "$PR_TITLE" | grep -Eq "$cc"; then
+            echo "::error::pull request title does not follow Conventional Commits: $PR_TITLE"
+            status=1
+          fi
+
+          # With squash_merge_commit_message=PR_BODY the body lands in the commit.
+          if printf '%s' "$PR_BODY" | grep -Eiq "$ban"; then
+            echo "::error::the pull request body contains an AI attribution trailer."
+            status=1
+          fi
+
+          for sha in $(git rev-list "${BASE_SHA}..${HEAD_SHA}"); do
+            if git log -1 --format=%B "$sha" | grep -Eiq "$ban"; then
+              echo "::error::commit $sha contains an AI attribution trailer."
+              status=1
+            fi
+            email=$(git log -1 --format='%ae%n%ce' "$sha")
+            if printf '%s' "$email" | grep -Fq 'noreply@anthropic.com'; then
+              echo "::error::commit $sha has an Anthropic address as author or committer."
+              status=1
+            fi
+          done
+
+          exit "$status"
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          node-version: '20'
-      - run: npm install
-      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+          fetch-depth: 0
+      # The pre-push hook scans only the new commits. The full scan over the
+      # history belongs here.
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The only required check in the ruleset. Matrix changes therefore cannot
+  # break the repository configuration, which is exactly how this repository
+  # ended up requiring three contexts no workflow produced.
+  ci-success:
+    name: CI Success
+    if: always()
+    needs: [quality, test, msrv, secrets, commit-hygiene]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every preceding job must have succeeded or been skipped
+        run: |
+          set -euo pipefail
+          printf '%s\n' '${{ toJSON(needs) }}' |
+            jq -e 'all(.[]; .result == "success" or .result == "skipped")'

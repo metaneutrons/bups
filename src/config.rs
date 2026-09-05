@@ -62,7 +62,18 @@ pub const TCP_PORT: u16 = 9100;
 pub const SNMP_PORT: u16 = 161;
 pub const TCP_BUFFER_SIZE: usize = 8192;
 pub const SNMP_BUFFER_SIZE: usize = 1024;
-pub const POST_WRITE_DELAY_MS: u64 = 100;
+/// One short look at the IN endpoint after a write, to forward status the
+/// printer volunteered. Deliberately not the retry loop of `read_raw`: during
+/// a raster transfer the printer sends nothing, so ten attempts at 500 ms each
+/// would cost five seconds per 8 KiB chunk.
+pub const STATUS_POLL_TIMEOUT_MS: u64 = 20;
+/// A connection that sends nothing for this long is dropped. Without it a peer
+/// can hold the printer open indefinitely, and the printer is held for the
+/// lifetime of a connection so that no status request is injected mid-job.
+pub const TCP_IDLE_TIMEOUT_S: u64 = 120;
+/// Connections served at once. Each holds a [`TCP_BUFFER_SIZE`] buffer, and only
+/// one can hold the printer anyway.
+pub const TCP_MAX_CONNECTIONS: usize = 16;
 
 // --- Reconnect ---
 

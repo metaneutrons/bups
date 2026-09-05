@@ -16,9 +16,9 @@ use nusb::{Endpoint, MaybeFuture};
 use tracing::{debug, trace, warn};
 
 use crate::config::{
-    BROTHER_VENDOR_ID, INIT_CMD, INVALIDATE_CMD, STATUS_MAGIC, STATUS_REQUEST, USB_EP_IN,
-    USB_EP_OUT, USB_INTERFACE, USB_READ_BUFFER, USB_READ_RETRIES, USB_READ_SIZE,
-    USB_READ_TIMEOUT_MS, USB_STATUS_DELAY_MS, USB_TIMEOUT_MS, USB_WRITE_CHUNK,
+    BROTHER_VENDOR_ID, INIT_CMD, INVALIDATE_CMD, STATUS_MAGIC, STATUS_POLL_TIMEOUT_MS,
+    STATUS_REQUEST, USB_EP_IN, USB_EP_OUT, USB_INTERFACE, USB_READ_BUFFER, USB_READ_RETRIES,
+    USB_READ_SIZE, USB_READ_TIMEOUT_MS, USB_STATUS_DELAY_MS, USB_TIMEOUT_MS, USB_WRITE_CHUNK,
 };
 use crate::error::{Error, Result};
 use crate::usb::Device;
@@ -205,7 +205,50 @@ impl Printer {
         .map_err(|e| Error::Transfer(e.to_string()))?
     }
 
+    /// Take one short look at the IN endpoint and return a status frame if the
+    /// printer volunteered one.
+    ///
+    /// This is not `read_raw`. During a raster transfer the printer sends
+    /// nothing, so `read_raw`'s ten attempts at 500 ms each would cost five
+    /// seconds for every 8 KiB written. One attempt with a 20 ms timeout keeps
+    /// the back channel open without stalling the job.
+    ///
+    /// Anything that is not a status frame is discarded rather than reported:
+    /// a partial frame mid-transfer is noise, not an error.
+    #[allow(
+        clippy::significant_drop_tightening,
+        reason = "submit and wait_next_complete must see the same locked endpoint"
+    )]
+    pub async fn poll_status(&self) -> Option<[u8; USB_READ_SIZE]> {
+        let ep = Arc::clone(&self.ep_in);
+        tokio::task::spawn_blocking(move || {
+            let mut ep = ep.lock().ok()?;
+            ep.submit(vec![0u8; USB_READ_BUFFER].into());
+            let completion =
+                ep.wait_next_complete(Duration::from_millis(STATUS_POLL_TIMEOUT_MS))?;
+            if completion.status.is_err() || completion.actual_len == 0 {
+                return None;
+            }
+            let mut buf = [0u8; USB_READ_SIZE];
+            let len = completion.actual_len.min(USB_READ_SIZE);
+            buf[..len].copy_from_slice(&completion.buffer[..len]);
+            if buf[0..2] == STATUS_MAGIC {
+                trace!(?buf, "printer volunteered a status frame");
+                Some(buf)
+            } else {
+                None
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
     /// Send a status request and read the response.
+    ///
+    /// Only safe when nothing else is writing to the printer: the three bytes
+    /// of `ESC i S` land in the raster stream otherwise. Callers hold the
+    /// printer mutex for as long as they need that guarantee.
     pub async fn read(&self) -> Result<[u8; USB_READ_SIZE]> {
         self.write(&STATUS_REQUEST).await?;
         tokio::time::sleep(Duration::from_millis(USB_STATUS_DELAY_MS)).await;

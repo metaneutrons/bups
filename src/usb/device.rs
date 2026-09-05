@@ -110,6 +110,12 @@ define_devices! {
     PtE550W,   0x2060, "PT-E550W", Series::Pt,     DEFAULT_CAPS;
     PtP700,    0x2061, "PT-P700", Series::Pt,       DEFAULT_CAPS;
     PtP750W,   0x2065, "PT-P750W", Series::Pt,     DEFAULT_CAPS;
+    // UNTESTED. Product ID from a user's own lsusb in issue #7; linux-usb.org
+    // does not list it. The P900 generation speaks a later revision of the
+    // raster protocol than the PT-E550W this parser was written against, and
+    // whether it exposes the same endpoints is unknown. Report back with
+    // --debug output.
+    PtP900,    0x208e, "PT-P900", Series::Pt,      DEFAULT_CAPS;
 
     // QL Series (labels)
     Ql500,     0x2015, "QL-500", Series::Ql,       DEFAULT_CAPS;
@@ -153,6 +159,7 @@ mod tests {
         Device::PtE550W,
         Device::PtP700,
         Device::PtP750W,
+        Device::PtP900,
         Device::Ql500,
         Device::Ql550,
         Device::Ql560,
@@ -176,8 +183,8 @@ mod tests {
     fn an_unknown_product_id_is_not_a_device() {
         assert_eq!(Device::from_pid(0x0000), None);
         assert_eq!(Device::from_pid(0xffff), None);
-        // PT-P900, reported in issue #7 but not yet in the table.
-        assert_eq!(Device::from_pid(0x208e), None);
+        // A Brother device that is not a supported label printer.
+        assert_eq!(Device::from_pid(0x0180), None);
     }
 
     #[test]
@@ -185,6 +192,9 @@ mod tests {
         assert_eq!(Device::from_pid(0x2060), Some(Device::PtE550W));
         assert_eq!(Device::from_pid(0x2042), Some(Device::Ql700));
         assert_eq!(Device::from_pid(0x209d), Some(Device::Ql820NWB));
+        // Issue #7. Untested against hardware, so the table entry is the only
+        // thing under test here.
+        assert_eq!(Device::from_pid(0x208e), Some(Device::PtP900));
     }
 
     /// A duplicated product ID would make the earlier arm shadow the later one

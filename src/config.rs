@@ -7,6 +7,9 @@
 // --- USB ---
 
 pub const BROTHER_VENDOR_ID: u16 = 0x04f9;
+/// The printer-class interface. Every model in the table exposes it as 0;
+/// an untested model that does not is the likely cause of an open failure.
+pub const USB_INTERFACE: u8 = 0;
 pub const USB_TIMEOUT_MS: u64 = 2000;
 pub const USB_EP_OUT: u8 = 0x02;
 pub const USB_EP_IN: u8 = 0x81;

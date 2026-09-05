@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4](https://github.com/metaneutrons/bups/compare/v0.3.3...v0.3.4) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** wait until the tap has reported a check before watching it ([#45](https://github.com/metaneutrons/bups/issues/45)) ([f1c24c2](https://github.com/metaneutrons/bups/commit/f1c24c2e1ba05d9e16c5b6658742791bf34162c2))
+
 ## [0.3.3](https://github.com/metaneutrons/bups/compare/v0.3.2...v0.3.3) (2026-09-05)
 
 

@@ -23,6 +23,11 @@ expect_used = "warn"
 cargo = { level = "warn", priority = -1 }
 multiple_crate_versions = "allow"
 
+[dev-dependencies]
+# The command path is async, so its tests need a runtime. rt only: they do
+# not spawn tasks or touch the network.
+tokio = { version = "1", features = ["rt", "macros"] }
+
 [build-dependencies]
 vergen-gitcl = { version = "9", features = ["build", "cargo", "rustc"] }
 

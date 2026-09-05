@@ -934,8 +934,11 @@ jobs:
       VERSION: ${{ needs.metadata.outputs.version }}
       TAG: ${{ needs.metadata.outputs.tag }}
       ARCHIVE_REPO: metaneutrons/apt-archive
-      # base_url plus the project's own prefix, both from the domain manifest.
-      ARCHIVE_BASE_URL: https://deb.metaneutrons.cc/bups
+      # base_url from the domain manifest. No project segment: since
+      # shared-root-v1 every project of a domain shares pool/ and
+      # dists/<suite>/ at the root, and render_archive.py rejects a manifest
+      # that still carries a per-project prefix.
+      ARCHIVE_BASE_URL: https://deb.metaneutrons.cc
     steps:
       # The project holds neither the signing key nor bucket access. It only
       # knocks; the archive fetches the .deb from this release, verifies the

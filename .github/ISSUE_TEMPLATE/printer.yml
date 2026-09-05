@@ -1,0 +1,32 @@
+name: Add a printer
+description: Request support for a Brother PT or QL model
+labels: [enhancement, device-support]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Device definitions are one line in a macro, so this is usually quick.
+        What we cannot do is test it — say whether you can.
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: 'For example: PT-P900.'
+    validations:
+      required: true
+  - type: input
+    id: usbid
+    attributes:
+      label: USB vendor and product ID
+      description: 'The `lsusb` line, for example: 04f9:208e. Your own observation beats linux-usb.org, which is incomplete for newer models.'
+    validations:
+      required: true
+  - type: dropdown
+    id: cantest
+    attributes:
+      label: Can you test a build against this printer?
+      options:
+        - 'Yes'
+        - 'No'
+    validations:
+      required: true

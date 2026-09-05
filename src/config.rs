@@ -85,6 +85,12 @@ pub const DEFAULT_MAX_RECONNECT_ATTEMPTS: u32 = 0; // 0 = infinite
 pub const MDNS_SERVICE_TYPE: &str = "_pdl-datastream._tcp.local.";
 pub const BROTHER_PDL: &str = "application/vnd.brother-hbp";
 
+/// How long to wait for the daemon to confirm that it has sent its goodbyes
+/// and stopped. A guard against a wedged daemon thread rather than an
+/// expected path: retiring an advertisement is local work and answers in
+/// milliseconds. The re-advertisement loop must not stall on it.
+pub const MDNS_RETIRE_TIMEOUT_MS: u64 = 2000;
+
 // --- SNMP ---
 
 /// Brother status OID: `1.3.6.1.4.1.2435.3.3.9.1.6.1.0`

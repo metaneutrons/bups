@@ -111,6 +111,16 @@ jobs:
           - { target: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm, debarch: arm64 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # git will not read a repository it does not trust, and in a container
+      # job it never trusts this one. Measured in exactly this image:
+      # HOME=/github/home with no .gitconfig at all, uid 0, workspace owned by
+      # 1001:1001, and `git rev-parse` answering "detected dubious ownership"
+      # with exit 128. actions/checkout does add the exception, but into a
+      # temporary HOME that it removes again in its Post step, so nothing of
+      # it survives into the build. build.rs then reads an absent git as a
+      # tarball build and labels the binary "unknown".
+      - name: Let git read the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build dependencies
         run: |
           set -euo pipefail
@@ -122,6 +132,9 @@ jobs:
       - name: Build
         env:
           SOURCE_DATE_EPOCH: ${{ needs.metadata.outputs.source_date_epoch }}
+          # Turns a payload that cannot name its commit into a failed build
+          # instead of a released binary that says "unknown".
+          BUPS_REQUIRE_GIT_PROVENANCE: '1'
         run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Record the glibc baseline
         run: |
@@ -188,6 +201,9 @@ jobs:
       - name: Build
         env:
           SOURCE_DATE_EPOCH: ${{ needs.metadata.outputs.source_date_epoch }}
+          # Turns a payload that cannot name its commit into a failed build
+          # instead of a released binary that says "unknown".
+          BUPS_REQUIRE_GIT_PROVENANCE: '1'
         run: cargo build --release --locked --target ${{ matrix.target }}
       # A path from the build machine inside the artefact means a build
       # dependency leaked in and the binary will not run elsewhere.

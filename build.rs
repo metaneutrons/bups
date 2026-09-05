@@ -41,6 +41,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     // definition and must not be labelled dirty.
     let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some();
 
+    // A release build has to know its own commit. v0.3.4 shipped a .deb whose
+    // --version read "unknown, unknown" while the musl payload from the same
+    // run read "44d4d5bc": the gnu payloads are built in a container that runs
+    // as root over a workspace owned by uid 1001, git refuses that as dubious
+    // ownership, and the exception actions/checkout writes goes into a
+    // temporary HOME it takes away again. The fallback above then did exactly
+    // what it is for, and nothing turned red. That output is what the bug
+    // report template asks users for, so it must not degrade quietly.
+    //
+    // Only the release workflow sets this. A tarball build, which is the case
+    // the fallback exists for, never sees it.
+    println!("cargo::rerun-if-env-changed=BUPS_REQUIRE_GIT_PROVENANCE");
+    if std::env::var_os("BUPS_REQUIRE_GIT_PROVENANCE").is_some()
+        && (sha == "unknown" || commit_date == "unknown")
+    {
+        return Err(format!(
+            "BUPS_REQUIRE_GIT_PROVENANCE is set but git answered nothing \
+             (sha {sha}, date {commit_date}); the binary cannot label itself"
+        )
+        .into());
+    }
+
     println!("cargo::rustc-env=BUPS_GIT_SHA={sha}");
     println!("cargo::rustc-env=BUPS_GIT_DATE={commit_date}");
     println!(

@@ -9,6 +9,19 @@
 
 use bitflags::bitflags;
 
+/// Printer family.
+///
+/// The two families share the 32-byte status frame but assign several fields
+/// different meanings, so status parsing has to know which one it is looking
+/// at. See `crate::status`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Series {
+    /// `P-touch`, `TZe` tape.
+    Pt,
+    /// `QL`, continuous tape and die-cut labels.
+    Ql,
+}
+
 bitflags! {
     /// Printer capabilities advertised via mDNS TXT records.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,9 +41,9 @@ const DEFAULT_CAPS: Capabilities = Capabilities::BINARY.union(Capabilities::TRAN
 
 /// Single source of truth for all supported devices.
 ///
-/// Format: `VariantName, pid, "Model Name", capabilities;`
+/// Format: `VariantName, pid, "Model Name", series, capabilities;`
 macro_rules! define_devices {
-    ($($variant:ident, $pid:expr, $name:expr, $caps:expr);+ $(;)?) => {
+    ($($variant:ident, $pid:expr, $name:expr, $series:expr, $caps:expr);+ $(;)?) => {
         /// Supported Brother printer devices.
         #[derive(Copy, Clone, Debug, PartialEq, Eq)]
         pub enum Device {
@@ -62,40 +75,48 @@ macro_rules! define_devices {
                     $(Self::$variant => $caps,)+
                 }
             }
+
+            /// Printer family, which decides how the status frame is read.
+            #[must_use]
+            pub const fn series(self) -> Series {
+                match self {
+                    $(Self::$variant => $series,)+
+                }
+            }
         }
     };
 }
 
 define_devices! {
     // PT Series (TZe tape)
-    Pt18R,     0x201a, "PT-18R",       DEFAULT_CAPS;
-    Pt1230Pc,  0x202c, "PT-1230PC",    DEFAULT_CAPS;
-    Pt2300,    0x2004, "PT-2300/2310",  DEFAULT_CAPS;
-    Pt2420Pc,  0x2007, "PT-2420PC",     DEFAULT_CAPS;
-    Pt2430Pc,  0x202d, "PT-2430PC",     DEFAULT_CAPS;
-    Pt2730,    0x2041, "PT-2730",       DEFAULT_CAPS;
-    Pt7600,    0x202b, "PT-7600",       DEFAULT_CAPS;
-    PtD600,    0x2074, "PT-D600",       DEFAULT_CAPS;
-    PtE550W,   0x2060, "PT-E550W",     DEFAULT_CAPS;
-    PtP700,    0x2061, "PT-P700",       DEFAULT_CAPS;
-    PtP750W,   0x2065, "PT-P750W",     DEFAULT_CAPS;
+    Pt18R,     0x201a, "PT-18R", Series::Pt,       DEFAULT_CAPS;
+    Pt1230Pc,  0x202c, "PT-1230PC", Series::Pt,    DEFAULT_CAPS;
+    Pt2300,    0x2004, "PT-2300/2310", Series::Pt,  DEFAULT_CAPS;
+    Pt2420Pc,  0x2007, "PT-2420PC", Series::Pt,     DEFAULT_CAPS;
+    Pt2430Pc,  0x202d, "PT-2430PC", Series::Pt,     DEFAULT_CAPS;
+    Pt2730,    0x2041, "PT-2730", Series::Pt,       DEFAULT_CAPS;
+    Pt7600,    0x202b, "PT-7600", Series::Pt,       DEFAULT_CAPS;
+    PtD600,    0x2074, "PT-D600", Series::Pt,       DEFAULT_CAPS;
+    PtE550W,   0x2060, "PT-E550W", Series::Pt,     DEFAULT_CAPS;
+    PtP700,    0x2061, "PT-P700", Series::Pt,       DEFAULT_CAPS;
+    PtP750W,   0x2065, "PT-P750W", Series::Pt,     DEFAULT_CAPS;
 
     // QL Series (labels)
-    Ql500,     0x2015, "QL-500",       DEFAULT_CAPS;
-    Ql550,     0x2016, "QL-550",       DEFAULT_CAPS;
-    Ql560,     0x2027, "QL-560",       DEFAULT_CAPS;
-    Ql570,     0x2028, "QL-570",       DEFAULT_CAPS;
-    Ql600,     0x20c0, "QL-600",       DEFAULT_CAPS;
-    Ql650Td,   0x201b, "QL-650TD",     DEFAULT_CAPS;
-    Ql700,     0x2042, "QL-700",       DEFAULT_CAPS;
-    Ql710W,    0x2043, "QL-710W",      DEFAULT_CAPS;
-    Ql720NW,   0x2044, "QL-720NW",     DEFAULT_CAPS;
-    Ql800,     0x209b, "QL-800",       DEFAULT_CAPS.union(Capabilities::COLOR);
-    Ql810W,    0x209c, "QL-810W",      DEFAULT_CAPS.union(Capabilities::COLOR);
-    Ql820NWB,  0x209d, "QL-820NWB",    DEFAULT_CAPS.union(Capabilities::COLOR);
-    Ql1050,    0x2020, "QL-1050",      DEFAULT_CAPS;
-    Ql1060N,   0x202a, "QL-1060N",     DEFAULT_CAPS;
-    Ql1100,    0x20a7, "QL-1100",      DEFAULT_CAPS;
-    Ql1110NWB, 0x20a8, "QL-1110NWB",   DEFAULT_CAPS;
-    Ql1115NWB, 0x20ab, "QL-1115NWB",   DEFAULT_CAPS;
+    Ql500,     0x2015, "QL-500", Series::Ql,       DEFAULT_CAPS;
+    Ql550,     0x2016, "QL-550", Series::Ql,       DEFAULT_CAPS;
+    Ql560,     0x2027, "QL-560", Series::Ql,       DEFAULT_CAPS;
+    Ql570,     0x2028, "QL-570", Series::Ql,       DEFAULT_CAPS;
+    Ql600,     0x20c0, "QL-600", Series::Ql,       DEFAULT_CAPS;
+    Ql650Td,   0x201b, "QL-650TD", Series::Ql,     DEFAULT_CAPS;
+    Ql700,     0x2042, "QL-700", Series::Ql,       DEFAULT_CAPS;
+    Ql710W,    0x2043, "QL-710W", Series::Ql,      DEFAULT_CAPS;
+    Ql720NW,   0x2044, "QL-720NW", Series::Ql,     DEFAULT_CAPS;
+    Ql800,     0x209b, "QL-800", Series::Ql,       DEFAULT_CAPS.union(Capabilities::COLOR);
+    Ql810W,    0x209c, "QL-810W", Series::Ql,      DEFAULT_CAPS.union(Capabilities::COLOR);
+    Ql820NWB,  0x209d, "QL-820NWB", Series::Ql,    DEFAULT_CAPS.union(Capabilities::COLOR);
+    Ql1050,    0x2020, "QL-1050", Series::Ql,      DEFAULT_CAPS;
+    Ql1060N,   0x202a, "QL-1060N", Series::Ql,     DEFAULT_CAPS;
+    Ql1100,    0x20a7, "QL-1100", Series::Ql,      DEFAULT_CAPS;
+    Ql1110NWB, 0x20a8, "QL-1110NWB", Series::Ql,   DEFAULT_CAPS;
+    Ql1115NWB, 0x20ab, "QL-1115NWB", Series::Ql,   DEFAULT_CAPS;
 }

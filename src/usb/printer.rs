@@ -78,7 +78,7 @@ impl Printer {
         }
 
         if let Some(model) = model_filter {
-            supported.retain(|(_, d, _)| d.model_name().eq_ignore_ascii_case(model));
+            supported.retain(|(_, d, _)| d.matches(model));
         }
         if let Some(serial) = serial_filter {
             supported.retain(|(_, _, s)| s == serial);

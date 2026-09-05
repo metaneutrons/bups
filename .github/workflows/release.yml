@@ -773,21 +773,45 @@ jobs:
           TAG: ${{ needs.metadata.outputs.tag }}
         run: |
           set -euo pipefail
-          state=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || echo absent)
+          # --repo on every call: this job has no checkout, so gh cannot infer
+          # the repository from git remotes. v0.3.1 died here with "fatal: not
+          # a git repository".
+          #
+          # Listed rather than viewed by tag. `gh release view` fails with exit
+          # 1 both for "no such release" and for an authentication or network
+          # error, and the previous `|| echo absent` turned every one of those
+          # into "there is no release yet" -- which would have created a second
+          # release over a real one. A listing separates the cases: an absent
+          # release is simply not in it, and a failure of the call itself
+          # aborts the step.
+          releases=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 \
+            --json tagName,isDraft)
+          if [ "$(printf '%s' "$releases" | jq 'length')" -ge 200 ]; then
+            echo "::error::more releases than the listing limit; cannot decide safely"
+            exit 1
+          fi
+          state=$(printf '%s' "$releases" | jq -r --arg t "$TAG" '
+            map(select(.tagName == $t))
+            | if length == 0 then "absent"
+              elif length > 1 then "ambiguous"
+              else (.[0].isDraft | tostring) end')
           case "$state" in
             absent)
               # A planned pipeline test tag has no draft from release-please.
-              gh release create "$TAG" --draft --verify-tag --title "$TAG" --notes "Pipeline test tag." ;;
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+                --draft --verify-tag --title "$TAG" --notes "Pipeline test tag." ;;
             true)
-              echo "draft from release-please, attaching assets" ;;
+              echo "::notice::draft from release-please, attaching assets" ;;
             false)
               echo "::error::release $TAG is already published"; exit 1 ;;
+            *)
+              echo "::error::cannot determine the state of $TAG: $state"; exit 1 ;;
           esac
       - name: Attach the assets
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.metadata.outputs.tag }}
-        run: gh release upload "$TAG" release/* --clobber
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" release/* --clobber
       - name: Download the assets back and verify what the draft actually holds
         env:
           GH_TOKEN: ${{ github.token }}
@@ -795,7 +819,7 @@ jobs:
         run: |
           set -euo pipefail
           back=$(mktemp -d)
-          gh release download "$TAG" --dir "$back"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$back"
           # The set on the release must equal the candidate inventory exactly.
           diff <(cd release && find . -maxdepth 1 -type f -printf '%P\n' | sort) \
                <(cd "$back" && find . -maxdepth 1 -type f -printf '%P\n' | sort) \
@@ -814,7 +838,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.metadata.outputs.tag }}
-        run: gh release edit "$TAG" --draft=false --prerelease --latest=false
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
 
   # -------------------------------------------------------------------------
   # 8  Channels. Only for a production tag.
@@ -1097,5 +1121,7 @@ jobs:
           TAG: ${{ needs.metadata.outputs.tag }}
         run: |
           set -euo pipefail
-          gh release edit "$TAG" --prerelease=false --latest
-          gh release view "$TAG" --json isPrerelease,isLatest --jq '"prerelease=\(.isPrerelease) latest=\(.isLatest)"'
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isPrerelease,isLatest \
+            --jq '"prerelease=\(.isPrerelease) latest=\(.isLatest)"'

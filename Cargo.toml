@@ -45,6 +45,38 @@ bitflags = "2"
 syslog-tracing = "0.3"
 libc = "0.2"
 
+# Debian packaging. The archive at deb.metaneutrons.cc reads package, version
+# and architecture exclusively from the file name, so the result has to be the
+# canonical Debian binary name `bups_<version>_<arch>.deb` with a Debian
+# architecture (amd64, arm64), never a Rust triple. cargo deb derives that from
+# --target; the release workflow checks the produced name rather than assuming
+# it, because a wrong name only surfaces in the archive and there as a hard
+# abort.
+#
+# Built with `cargo deb --no-build` from binaries compiled earlier, so this
+# step needs no toolchain and runs outside the build container.
+[package.metadata.deb]
+maintainer = "Fabian Schmieder <schmieder@lexict.de>"
+copyright = "2026, Fabian Schmieder"
+license-file = ["LICENSE", "0"]
+extended-description = "Exposes USB-connected Brother PT (P-touch) and QL label printers on the network: raw print data on TCP 9100, mDNS/Bonjour advertisement for automatic discovery, and SNMP status queries."
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/bups", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/bups/README.md", "644"],
+    ["debian/bups.udev", "lib/udev/rules.d/60-bups.rules", "644"],
+]
+# No Debian revision: the archive contract is `bups_<version>_<arch>.deb`
+# with the version straight from the tag, so `v0.2.0` must yield
+# `bups_0.2.0_amd64.deb`.
+revision = ""
+# Explicit rather than `$auto`. dpkg-shlibdeps cannot resolve a
+# cross-compiled binary for a foreign architecture, and with `--no-build`
+# there is no local toolchain to ask either; `$auto` then silently produces
+# a package with no dependencies at all.
+depends = "libc6 (>= 2.34), libudev1"
+
 [profile.release]
 lto = true
 strip = true

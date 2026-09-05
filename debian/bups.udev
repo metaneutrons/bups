@@ -1,0 +1,7 @@
+# Brother PT and QL label printers: hand the device to the plugdev group so
+# bups does not need root for USB access.
+#
+# bups detaches the usblp kernel driver when it claims the interface, so
+# usblp does not have to be blacklisted; a CUPS queue on the same device
+# would, however, lose it while bups holds it.
+SUBSYSTEM=="usb", ATTR{idVendor}=="04f9", MODE="0660", GROUP="plugdev"

@@ -420,7 +420,6 @@ jobs:
           class Bups < Formula
             desc "USB print server for Brother PT and QL label printers"
             homepage "https://github.com/${GITHUB_REPOSITORY}"
-            version "${VERSION}"
             license "GPL-3.0-or-later"
 
             on_macos do
@@ -455,8 +454,17 @@ jobs:
           end
           EOF
           ruby -c channel/bups.rb
-          # Exactly four download URLs, all of this tag. A stale URL from a
-          # previous release would otherwise ship silently.
+          # No `version` field: `brew audit --strict` rejects it as redundant
+          # when the URLs carry the version, and the tap runs that audit before
+          # it installs. v0.3.2 failed there with
+          #   Stable: `version 0.3.2` is redundant with version scanned from URL
+          # The URL count below is what keeps the version honest instead: four
+          # URLs, all of this tag. A stale URL from a previous release would
+          # otherwise ship silently.
+          if grep -q '^\s*version "' channel/bups.rb; then
+            echo "::error::the formula carries an explicit version; brew audit rejects it"
+            exit 1
+          fi
           urls=$(grep -c "releases/download/${TAG}/" channel/bups.rb)
           if [ "$urls" -ne 4 ]; then
             echo "::error::expected 4 URLs of ${TAG} in the formula, found $urls"
@@ -959,29 +967,64 @@ jobs:
         run: |
           set -euo pipefail
           check=$(mktemp -d)
+          # The clone is the authoritative check: it compares what the public
+          # repository actually holds against what was qualified. Its retries
+          # keep the last error instead of discarding it, so a persistent
+          # failure says why.
+          err=""
+          cloned=false
           for _ in 1 2 3 4 5; do
-            if git clone --depth 1 "https://aur.archlinux.org/bups.git" "$check/aur" 2>/dev/null; then
+            if err=$(git clone --depth 1 "https://aur.archlinux.org/bups.git" "$check/aur" 2>&1); then
+              cloned=true
               break
             fi
             sleep 10
           done
+          if [ "$cloned" != true ]; then
+            echo "::error::could not read the public AUR repository back: $err"
+            exit 1
+          fi
           diff -u channel/PKGBUILD "$check/aur/PKGBUILD"
           diff -u channel/.SRCINFO "$check/aur/.SRCINFO"
-          for _ in 1 2 3 4 5 6; do
+          echo "::notice::the public AUR repository matches what was qualified"
+
+          # The RPC is a separate index and lags the git repository. On v0.3.2
+          # the push had long succeeded and the git read-back matched while the
+          # RPC still reported 0.1.1-1; it caught up about 160 s after the
+          # push, and the old bound of 6 x 20 s failed a correct publication.
+          # Fifteen minutes, and a timeout says the publication stands.
+          deadline=$(( SECONDS + 900 ))
+          while :; do
             rpc=$(curl -sS "https://aur.archlinux.org/rpc/v5/info?arg[]=bups" \
                   | jq -r '.results[0].Version // empty')
             if [ "${rpc%%-*}" = "$VERSION" ]; then
-              echo "AUR RPC reports $rpc"
+              echo "::notice::AUR RPC reports $rpc"
               exit 0
             fi
-            sleep 20
+            if [ "$SECONDS" -gt "$deadline" ]; then
+              echo "::error::the AUR RPC still does not list $VERSION after 15 minutes."
+              echo "::error::the git repository already carries it, so the push succeeded and the index is behind."
+              exit 1
+            fi
+            sleep 30
           done
-          echo "::error::AUR RPC never reported $VERSION"
-          exit 1
 
+  # After promote, not before it. The archive reads only stable releases --
+  # select_assets.py skips drafts and prereleases -- while stage 7 deliberately
+  # publishes as a prerelease and only promote makes it stable. Knocking before
+  # that is a circular dependency the archive can never satisfy: on v0.3.2 it
+  # answered
+  #   AR170 no stable release carries a .deb for the declared packages (bups)
+  # having seen only v0.1.1 and v0.1.0.
+  #
+  # This departs from the stage order deliberately. APT is not a channel the
+  # project publishes to; it is a downstream consumer that fetches from the
+  # finished release. A failure here therefore cannot un-promote anything, and
+  # it does not have to: the archive keeps serving the previous version until
+  # the dispatch is repeated.
   notify-apt-archive:
     name: Tell the APT archive and check what it serves
-    needs: [metadata, preflight, stage]
+    needs: [metadata, preflight, promote]
     if: ${{ needs.metadata.outputs.is_prerelease == 'false' && needs.preflight.outputs.publish_apt == 'true' }}
     runs-on: ubuntu-24.04
     environment: release
@@ -1098,18 +1141,19 @@ jobs:
   # -------------------------------------------------------------------------
   promote:
     name: Promote to latest
-    needs: [metadata, stage, publish-homebrew, publish-aur, notify-apt-archive]
+    needs: [metadata, stage, publish-homebrew, publish-aur]
     # A channel the preflight found unconfigured is skipped, and skipping must
     # not block the promote. A channel that ran and failed must. Listing the
     # results explicitly says which of the two happened; `always()` alone would
     # promote over a genuine failure.
+    #
+    # APT is deliberately absent: it runs after this job, see the comment there.
     if: >-
       !cancelled()
       && needs.metadata.outputs.is_prerelease == 'false'
       && needs.stage.result == 'success'
       && needs.publish-homebrew.result == 'success'
       && (needs.publish-aur.result == 'success' || needs.publish-aur.result == 'skipped')
-      && (needs.notify-apt-archive.result == 'success' || needs.notify-apt-archive.result == 'skipped')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -1122,6 +1166,11 @@ jobs:
         run: |
           set -euo pipefail
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --json isPrerelease,isLatest \
-            --jq '"prerelease=\(.isPrerelease) latest=\(.isLatest)"'
+          # `gh release view --json isLatest` does not exist; the field is not
+          # part of a release. Which release is latest is a property of the
+          # repository, so it is asked of the repository.
+          pre=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)
+          latest=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)
+          echo "prerelease=$pre latest=$latest"
+          [ "$pre" = "false" ] || { echo "::error::$TAG is still marked as a prerelease"; exit 1; }
+          [ "$latest" = "$TAG" ] || { echo "::error::latest is $latest, not $TAG"; exit 1; }

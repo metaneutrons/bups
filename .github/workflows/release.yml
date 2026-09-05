@@ -124,7 +124,7 @@ jobs:
           cargo install git-cliff
           git cliff --tag v${{ steps.version.outputs.version }} --output RELEASE_NOTES.md
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: release-assets/*
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}

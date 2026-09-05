@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3](https://github.com/metaneutrons/bups/compare/v0.3.2...v0.3.3) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** the tap pull request must carry the generated README ([#44](https://github.com/metaneutrons/bups/issues/44)) ([86ccf22](https://github.com/metaneutrons/bups/commit/86ccf22aae7c6d3f89ec0bbbf957076fba7a9659))
+* **release:** the three channel failures of v0.3.2 ([#42](https://github.com/metaneutrons/bups/issues/42)) ([cf6881f](https://github.com/metaneutrons/bups/commit/cf6881f5cfc6c955bec76eb38f1fec57bbbcba99))
+
 ## [0.3.2](https://github.com/metaneutrons/bups/compare/v0.3.1...v0.3.2) (2026-09-05)
 
 

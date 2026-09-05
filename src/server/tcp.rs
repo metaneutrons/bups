@@ -81,7 +81,7 @@ async fn handle_connection(
         // Read status after write; cache last good response.
         tokio::time::sleep(Duration::from_millis(POST_WRITE_DELAY_MS)).await;
         if let Ok(raw) = p.read_raw().await {
-            if let Some(s) = Status::parse(raw) {
+            if let Some(s) = Status::parse(raw, p.device().series()) {
                 debug!(status = %s, "printer status");
                 if s.has_error() {
                     warn!(errors = ?s.errors(), "printer error");
@@ -111,17 +111,21 @@ async fn handle_command(data: &[u8], printer: &Arc<Mutex<Option<Printer>>>) -> O
                 return Some("STATUS: No printer connected\n".into());
             };
             let model = p.device().model_name();
+            let series = p.device().series();
             let result = p.read().await;
             drop(guard);
 
             result.map_or_else(
                 |_| Some("STATUS: Read failed\n".into()),
                 |raw| {
-                    Status::parse(raw).map_or_else(
+                    Status::parse(raw, series).map_or_else(
                         || Some("STATUS: Unknown\n".into()),
                         |s| {
                             let label = if s.has_error() { "ERROR" } else { "READY" };
                             let errors = s.errors();
+                            // errors() never comes back empty while has_error()
+                            // is true: an undocumented bit is reported as its
+                            // raw value rather than dropped.
                             let error_str = if errors.is_empty() {
                                 "None".to_owned()
                             } else {
@@ -129,8 +133,8 @@ async fn handle_command(data: &[u8], printer: &Arc<Mutex<Option<Printer>>>) -> O
                             };
                             Some(format!(
                                 "STATUS: {label}\nModel: {model}\n\
-                                 Media: {}mm\nError: {error_str}\n",
-                                s.media_width
+                                 Media: {}\nError: {error_str}\n",
+                                s.media_description()
                             ))
                         },
                     )

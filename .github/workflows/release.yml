@@ -872,11 +872,20 @@ jobs:
           exit 1
 
   notify-apt-archive:
-    name: Tell the APT archive
+    name: Tell the APT archive and check what it serves
     needs: [metadata, preflight, stage]
     if: ${{ needs.metadata.outputs.is_prerelease == 'false' && needs.preflight.outputs.publish_apt == 'true' }}
     runs-on: ubuntu-24.04
     environment: release
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.metadata.outputs.version }}
+      TAG: ${{ needs.metadata.outputs.tag }}
+      ARCHIVE_REPO: metaneutrons/apt-archive
+      # base_url plus the project's own prefix, both from the domain manifest.
+      ARCHIVE_BASE_URL: https://deb.metaneutrons.cc/bups
     steps:
       # The project holds neither the signing key nor bucket access. It only
       # knocks; the archive fetches the .deb from this release, verifies the
@@ -884,7 +893,6 @@ jobs:
       - name: Dispatch the publication
         env:
           GH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
-          VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           set -euo pipefail
           # Explicit JSON rather than gh's bracket notation, whose nesting
@@ -893,8 +901,74 @@ jobs:
           # selects the versions itself from this repository's releases.
           jq -n '{event_type:"publish-archive",
                   client_payload:{domain:"metaneutrons.cc",project:"bups"}}' \
-            | gh api repos/metaneutrons/apt-archive/dispatches --input -
-          echo "dispatched publish-archive for bups ${VERSION}"
+            | gh api "repos/${ARCHIVE_REPO}/dispatches" --input -
+          echo "::notice::asked ${ARCHIVE_REPO} to publish bups ${VERSION}"
+
+      # The dispatch returns no run id, so there is nothing to follow. What is
+      # checked instead is the public URL, and that is the stronger statement
+      # anyway: not that a run started, but that the archive serves the version.
+      - name: Wait until the archive serves the version
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/pick.awk" <<'AWK'
+          $1 == "Package:"  { pkg  = $2 }
+          $1 == "Version:"  { ver  = $2 }
+          $1 == "Filename:" { name = $2 }
+          # Exact, not a prefix: revision = "" in Cargo.toml means the Debian
+          # version is the tag core with nothing appended, so a prefix match
+          # would also accept 0.3.0-1 or 0.3.01.
+          function hit() { return pkg == package && ver == version }
+          # awk runs END even after exit, hence the marker.
+          /^[[:space:]]*$/ { if (hit()) { print name; done = 1; exit }
+                             pkg = ""; ver = ""; name = "" }
+          END { if (!done && hit()) print name }
+          AWK
+
+          # No cache buster: the zone's cache rule sets Cache-Control: no-store
+          # for dists/**, precisely so a stale index cannot race a new
+          # InRelease.
+          index_url="${ARCHIVE_BASE_URL}/dists/rolling/main/binary-amd64/Packages.gz"
+          deadline=$(( SECONDS + 1200 ))
+          while :; do
+            if curl --fail --silent --show-error --location "$index_url" --output packages.gz 2>/dev/null; then
+              found=$(gzip -dc packages.gz \
+                | awk -v package=bups -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
+              if [ -n "$found" ]; then
+                echo "::notice::${ARCHIVE_BASE_URL} serves ${VERSION} as ${found}"
+                break
+              fi
+            fi
+            if [ "$SECONDS" -gt "$deadline" ]; then
+              echo "::error::the archive does not serve ${VERSION} within the deadline; the dispatch went out, the cause is in the runs of ${ARCHIVE_REPO}"
+              exit 1
+            fi
+            sleep 30
+          done
+
+      # An index naming the version is not yet a delivered file. This compares
+      # what the archive actually hands out against what this release carries.
+      - name: The published package must equal the release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            curl --fail --silent --show-error --location \
+              "${ARCHIVE_BASE_URL}/dists/rolling/main/binary-${arch}/Packages.gz" \
+              --output "packages-${arch}.gz"
+            filename=$(gzip -dc "packages-${arch}.gz" \
+              | awk -v package=bups -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
+            if [ -z "$filename" ]; then
+              echo "::error::the ${arch} index names no file for ${VERSION}"
+              exit 1
+            fi
+            curl --fail --silent --show-error --location \
+              "${ARCHIVE_BASE_URL}/${filename}" --output "published-${arch}.deb"
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern "bups_${VERSION}_${arch}.deb" --dir ./release --clobber
+            cmp "published-${arch}.deb" "./release/bups_${VERSION}_${arch}.deb"
+            echo "::notice::${arch} is byte for byte the release asset"
+          done
 
   # -------------------------------------------------------------------------
   # 9  Promote. Only once every channel has succeeded.

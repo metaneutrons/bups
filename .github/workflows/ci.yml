@@ -21,6 +21,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         rust: [stable, beta]
+    # rust-toolchain.toml hat Vorrang vor `rustup default`, das
+    # dtolnay/rust-toolchain setzt. Ohne RUSTUP_TOOLCHAIN liefe jede
+    # Matrixzeile auf stable, und die beta-Zeilen waeren Duplikate.
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
@@ -72,11 +77,15 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   msrv:
-    name: MSRV (1.85)
+    name: MSRV (1.95)
     runs-on: ubuntu-latest
+    # Ohne RUSTUP_TOOLCHAIN gewinnt rust-toolchain.toml und der Job pruefte
+    # stable. Die MSRV waere dann eine Behauptung ohne Testlauf.
+    env:
+      RUSTUP_TOOLCHAIN: "1.95"
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.85
+      - uses: dtolnay/rust-toolchain@1.95
       - uses: Swatinem/rust-cache@v2
       - name: Install libudev
         run: sudo apt-get update && sudo apt-get install -y libudev-dev

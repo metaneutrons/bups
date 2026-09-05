@@ -9,7 +9,7 @@ homepage = "https://github.com/metaneutrons/bups"
 keywords = ["label", "print", "server", "usb"]
 categories = ["hardware-support", "network-programming"]
 authors = ["Fabian Schmieder"]
-rust-version = "1.85"
+rust-version = "1.95"
 publish = false
 
 [lints.rust]

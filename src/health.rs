@@ -43,13 +43,13 @@ pub async fn run(
             let mut guard = printer.lock().await;
 
             // Check if current printer is still alive.
-            if let Some(ref p) = *guard {
-                if p.read().await.is_err() {
-                    info!("printer disconnected");
-                    *guard = None;
-                    let _ = mdns_tx.send(None);
-                    attempts = 0;
-                }
+            if let Some(ref p) = *guard
+                && p.read().await.is_err()
+            {
+                info!("printer disconnected");
+                *guard = None;
+                let _ = mdns_tx.send(None);
+                attempts = 0;
             }
 
             // Try to reconnect if absent.

@@ -24,28 +24,34 @@ pub const INIT_CMD: [u8; 2] = [0x1b, 0x40]; // ESC @
 pub const STATUS_REQUEST: [u8; 3] = [0x1b, 0x69, 0x53]; // ESC i S
 
 // --- Status response format (32-byte) ---
+//
+// Offsets from the manufacturer references, which agree on every field below:
+//   PT: Raster Command Reference PT-E550W/P750W/P710BT, rev. 1.02, section 4
+//   QL: Raster Command Reference QL-710W/720NW, rev. 1.0, section 4
+// The *meanings* of media type and the error bits differ between the two;
+// those tables live in `crate::status` because they are series-specific.
 
+/// Bytes 0 and 1: print head mark 80h, size 20h.
 pub const STATUS_MAGIC: [u8; 2] = [0x80, 0x20];
 
 pub const STATUS_OFF_ERROR1: usize = 8;
 pub const STATUS_OFF_ERROR2: usize = 9;
 pub const STATUS_OFF_MEDIA_WIDTH: usize = 10;
 pub const STATUS_OFF_MEDIA_TYPE: usize = 11;
+/// On QL die-cut labels this carries the die-cut length, which is what
+/// identifies the label. Fixed at 00h for continuous tape and on PT.
+pub const STATUS_OFF_MEDIA_LENGTH: usize = 17;
 pub const STATUS_OFF_STATUS_TYPE: usize = 18;
-pub const STATUS_OFF_PHASE: usize = 20;
+/// Byte 19 is the phase *type*. Bytes 20 and 21 are the phase *number*,
+/// big-endian; reading byte 20 as the phase yields the number's high byte,
+/// which is 00h in every documented case.
+pub const STATUS_OFF_PHASE_TYPE: usize = 19;
+pub const STATUS_OFF_PHASE_NUMBER_HI: usize = 20;
+pub const STATUS_OFF_PHASE_NUMBER_LO: usize = 21;
+/// PT only. Bytes 24 to 31 are reserved and fixed at 00h on QL.
 pub const STATUS_OFF_TAPE_COLOR: usize = 24;
+/// PT only, see [`STATUS_OFF_TAPE_COLOR`].
 pub const STATUS_OFF_TEXT_COLOR: usize = 25;
-
-// --- Error bit flags ---
-
-pub const ERR1_NO_MEDIA: u8 = 0x01;
-pub const ERR1_CUTTER_JAM: u8 = 0x04;
-pub const ERR1_WEAK_BATTERY: u8 = 0x08;
-pub const ERR1_HIGH_VOLTAGE: u8 = 0x40;
-
-pub const ERR2_WRONG_MEDIA: u8 = 0x01;
-pub const ERR2_COVER_OPEN: u8 = 0x10;
-pub const ERR2_OVERHEATING: u8 = 0x20;
 
 // --- Network ---
 

@@ -581,7 +581,13 @@ jobs:
     if: ${{ needs.metadata.outputs.is_prerelease == 'false' }}
     runs-on: ubuntu-24.04
     environment: release
+    outputs:
+      publish_aur: ${{ steps.channels.outputs.aur }}
+      publish_apt: ${{ steps.channels.outputs.apt }}
     steps:
+      # Homebrew is not optional here: it is the channel this project has
+      # always shipped through, so a missing credential is a mistake rather
+      # than a configuration choice.
       - name: Homebrew tap is writable
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -592,14 +598,60 @@ jobs:
           [ "$push" = "true" ] || { echo "::error::no push permission on the tap"; exit 1; }
           gh api repos/metaneutrons/homebrew-tap/branches/main --jq .name >/dev/null
           echo "tap reachable and writable"
-      - name: AUR is reachable and the key is present
+
+      - name: Decide which of the optional channels are configured
+        id: channels
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
+          APT_ARCHIVE_DISPATCH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          # A channel runs only when fully configured. Missing configuration
+          # skips it; partial configuration is an error, because that usually
+          # means a secret was renamed and the run would fail halfway through
+          # a public mutation. Same rule as ugos-cli.
+          #
+          # Only the dispatch token for APT: the signing key and the bucket
+          # access live in the archive repository, never here.
+          aur_names=(AUR_SSH_PRIVATE_KEY AUR_SSH_KNOWN_HOSTS)
+          apt_names=(APT_ARCHIVE_DISPATCH_TOKEN)
+
+          decide() {
+            local channel=$1; shift
+            local present=0 missing=0 name
+            for name in "$@"; do
+              if [ -n "${!name:-}" ]; then present=$((present + 1)); else missing=$((missing + 1)); fi
+            done
+            if [ "$present" -eq 0 ]; then
+              echo "::notice::$channel is not configured and will be skipped" >&2
+              printf 'false'
+            elif [ "$missing" -gt 0 ]; then
+              echo "::error::$channel is only partly configured; $missing value(s) missing" >&2
+              return 1
+            else
+              printf 'true'
+            fi
+          }
+
+          # Assignment and call must stay separate. Written as
+          # echo "aur=$(decide ...)" a failure of decide is swallowed, because
+          # the exit status would be echo's, and a half-configured channel
+          # would then continue regardless.
+          aur=$(decide AUR "${aur_names[@]}")
+          apt=$(decide APT "${apt_names[@]}")
+          echo "aur=$aur" >> "$GITHUB_OUTPUT"
+          echo "apt=$apt" >> "$GITHUB_OUTPUT"
+
+      # Only worth doing when the channel is going to run. Authenticating
+      # against a foreign host is itself a small public act.
+      - name: AUR authentication really works
+        if: steps.channels.outputs.aur == 'true'
         env:
           AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           AUR_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "$AUR_KEY" || { echo "::error::AUR_SSH_PRIVATE_KEY is empty"; exit 1; }
-          test -n "$AUR_KNOWN_HOSTS" || { echo "::error::AUR_SSH_KNOWN_HOSTS is empty"; exit 1; }
           install -d -m700 ~/.ssh
           printf '%s\n' "$AUR_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
@@ -612,12 +664,13 @@ jobs:
           printf '%s\n' "$out"
           printf '%s' "$out" | grep -qi 'interactive shell is disabled' \
             || { echo "::error::AUR authentication did not succeed"; exit 1; }
+
       - name: The APT archive can be told about this release
+        if: steps.channels.outputs.apt == 'true'
         env:
           GH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
         run: |
           set -euo pipefail
-          test -n "$GH_TOKEN" || { echo "::error::APT_ARCHIVE_DISPATCH_TOKEN is empty"; exit 1; }
           # Read only: the project holds no signing key and no bucket access.
           # It may only knock on the archive, and the archive fetches from the
           # attested release itself.
@@ -754,8 +807,8 @@ jobs:
 
   publish-aur:
     name: Publish to the AUR
-    needs: [metadata, stage]
-    if: ${{ needs.metadata.outputs.is_prerelease == 'false' }}
+    needs: [metadata, preflight, stage]
+    if: ${{ needs.metadata.outputs.is_prerelease == 'false' && needs.preflight.outputs.publish_aur == 'true' }}
     runs-on: ubuntu-24.04
     environment: release
     steps:
@@ -820,8 +873,8 @@ jobs:
 
   notify-apt-archive:
     name: Tell the APT archive
-    needs: [metadata, stage]
-    if: ${{ needs.metadata.outputs.is_prerelease == 'false' }}
+    needs: [metadata, preflight, stage]
+    if: ${{ needs.metadata.outputs.is_prerelease == 'false' && needs.preflight.outputs.publish_apt == 'true' }}
     runs-on: ubuntu-24.04
     environment: release
     steps:
@@ -849,7 +902,17 @@ jobs:
   promote:
     name: Promote to latest
     needs: [metadata, stage, publish-homebrew, publish-aur, notify-apt-archive]
-    if: ${{ needs.metadata.outputs.is_prerelease == 'false' }}
+    # A channel the preflight found unconfigured is skipped, and skipping must
+    # not block the promote. A channel that ran and failed must. Listing the
+    # results explicitly says which of the two happened; `always()` alone would
+    # promote over a genuine failure.
+    if: >-
+      !cancelled()
+      && needs.metadata.outputs.is_prerelease == 'false'
+      && needs.stage.result == 'success'
+      && needs.publish-homebrew.result == 'success'
+      && (needs.publish-aur.result == 'success' || needs.publish-aur.result == 'skipped')
+      && (needs.notify-apt-archive.result == 'success' || needs.notify-apt-archive.result == 'skipped')
     runs-on: ubuntu-24.04
     permissions:
       contents: write

@@ -17,8 +17,8 @@ use tracing::{debug, trace, warn};
 
 use crate::config::{
     BROTHER_VENDOR_ID, INIT_CMD, INVALIDATE_CMD, STATUS_MAGIC, STATUS_REQUEST, USB_EP_IN,
-    USB_EP_OUT, USB_READ_BUFFER, USB_READ_RETRIES, USB_READ_SIZE, USB_READ_TIMEOUT_MS,
-    USB_STATUS_DELAY_MS, USB_TIMEOUT_MS, USB_WRITE_CHUNK,
+    USB_EP_OUT, USB_INTERFACE, USB_READ_BUFFER, USB_READ_RETRIES, USB_READ_SIZE,
+    USB_READ_TIMEOUT_MS, USB_STATUS_DELAY_MS, USB_TIMEOUT_MS, USB_WRITE_CHUNK,
 };
 use crate::error::{Error, Result};
 use crate::usb::Device;
@@ -91,7 +91,15 @@ impl Printer {
         debug!(model = device.model_name(), serial = %serial, "opening printer");
 
         let usb = info.open().wait().map_err(Error::Usb)?;
-        let iface = usb.claim_interface(0).wait().map_err(Error::Usb)?;
+        // detach_and_claim_interface, not claim_interface: on Linux the usblp
+        // kernel module binds Brother printers as soon as they appear, and
+        // wherever CUPS is installed it is loaded. A plain claim then fails
+        // with EBUSY and bups cannot start at all. On every other platform
+        // nusb documents this call as identical to claim_interface.
+        let iface = usb
+            .detach_and_claim_interface(USB_INTERFACE)
+            .wait()
+            .map_err(Error::Usb)?;
 
         let ep_out = iface
             .endpoint::<Bulk, Out>(USB_EP_OUT)

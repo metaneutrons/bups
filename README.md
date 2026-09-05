@@ -35,6 +35,7 @@ PIDs sourced from [linux-usb.org](http://www.linux-usb.org/usb.ids).
 | PT-E550W | 0x2060 | ✅ |
 | PT-P700 | 0x2061 | |
 | PT-P750W | 0x2065 | |
+| PT-P900 | 0x208e | untested, see [#7](https://github.com/metaneutrons/bups/issues/7) |
 
 ### QL Series (Labels)
 | Model | PID | Tested |

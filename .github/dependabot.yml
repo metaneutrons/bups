@@ -1,0 +1,53 @@
+# Nach Update-Art getrennt. Eine Gruppe mit patterns: ['*'] ueber alle Arten
+# buendelt Breaking Changes mit harmlosen Bumps, und ein kaputtes Update haelt
+# dann alle uebrigen auf. Minor und Patch bleiben gebuendelt, Major kommt
+# einzeln.
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      rust-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  # Eigener Eintrag: die Toolchain betrifft den ganzen Build und teilt sich
+  # nie einen Pull Request. `rust-toolchain` fehlt in der Oekosystem-Tabelle
+  # der GitHub-Doku, steht aber im veroeffentlichten Schema.
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:05'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:15'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+      # semver-major-days ist fuer github-actions nicht erlaubt. Steht es hier,
+      # verwirft Dependabot die GANZE Datei und kein Update laeuft mehr.
+    groups:
+      github-actions-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]

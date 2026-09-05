@@ -1,0 +1,45 @@
+name: Bug report
+description: Something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security problems here. Use
+        [private vulnerability reporting](https://github.com/metaneutrons/bups/security/advisories/new).
+  - type: input
+    id: version
+    attributes:
+      label: bups version
+      description: Output of `bups --version`.
+    validations:
+      required: true
+  - type: input
+    id: printer
+    attributes:
+      label: Printer model and USB ID
+      description: 'Model plus the `lsusb` line, for example: PT-P750W, 04f9:2065.'
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system
+      description: 'For example: Debian 13 x86_64, OpenWrt 24.10 x86_64, macOS 15 arm64.'
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: Run with `--debug` and paste the output. Redact serial numbers if you prefer.
+      render: text
+    validations:
+      required: false

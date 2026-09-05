@@ -1,8 +1,7 @@
 # bups - Brother USB Print Server
 
 [![CI](https://github.com/metaneutrons/bups/actions/workflows/ci.yml/badge.svg)](https://github.com/metaneutrons/bups/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/bups.svg)](https://crates.io/crates/bups)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Rust](https://img.shields.io/badge/Rust-1.95+-orange.svg)](https://www.rust-lang.org/)
 [![AUR](https://img.shields.io/aur/version/bups)](https://aur.archlinux.org/packages/bups)
 
@@ -67,11 +66,21 @@ brew tap metaneutrons/tap
 brew install bups
 ```
 
-### Cargo
+### Debian and Ubuntu
 
 ```bash
-cargo install bups
+curl -fsSL https://deb.metaneutrons.cc/metaneutrons-archive-keyring.asc \
+  | sudo tee /usr/share/keyrings/metaneutrons-archive-keyring.asc > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/metaneutrons-archive-keyring.asc] https://deb.metaneutrons.cc/bups rolling main" \
+  | sudo tee /etc/apt/sources.list.d/bups.list
+sudo apt update && sudo apt install bups
 ```
+
+### Prebuilt binaries
+
+Every release carries signed archives for Linux (x86_64, aarch64, armv7, glibc
+and musl) and macOS (x86_64, aarch64), see
+[Releases](https://github.com/metaneutrons/bups/releases).
 
 ### AUR (Arch Linux)
 
@@ -235,11 +244,26 @@ This project was heavily inspired by and based on the excellent work of **Ryan K
 
 ## License
 
-GPL-3.0-or-later
-
+bups - the print server for USB-based label printers
 Copyright (C) 2026 Fabian Schmieder
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+The full licence text is in [LICENSE](LICENSE).
 
 ## See Also
 
 - [rust-ptouch](https://github.com/ryankurte/rust-ptouch) - Brother P-Touch Raster Driver
-- [Brother Raster Command Reference](https://download.brother.com/welcome/docp100064/cv_pte550wp750wp710bt_eng_raster_101.pdf)
+- [Brother Raster Command Reference, PT-E550W/P750W/P710BT](https://download.brother.com/welcome/docp100064/cv_pte550wp750wp710bt_eng_raster_102.pdf)
+- [Brother Raster Command Reference, QL-710W/720NW](https://download.brother.com/welcome/docp000698/cv_ql710720_eng_raster_100.pdf)

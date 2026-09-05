@@ -1,0 +1,51 @@
+name: Security Audit
+
+# Deliberately a file of its own. GitHub disables scheduled workflows in public
+# repositories after 60 days without a commit, and it disables the entire file
+# rather than the cron trigger. While this cron lived in ci.yml, that took the
+# whole of CI down with it: from mid-August 2026 no push and no pull request
+# ran a single check, and nothing turned red to say so.
+#
+# Here the blast radius of that is the advisory scan alone. `cargo deny check`
+# in ci.yml still covers every pull request against the committed lockfile;
+# what this adds is a newly published advisory against unchanged dependencies.
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  checks: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Advisory scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # A scheduled workflow that has been switched off produces no failure, only
+  # silence, which is what made the ci.yml outage invisible for weeks. This
+  # step writes a dated line into the run summary so the workflow list shows at
+  # a glance when it last actually ran.
+  heartbeat:
+    name: Heartbeat
+    needs: [audit]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Record the run
+        run: |
+          set -euo pipefail
+          printf 'Advisory scan ran on %s, result: %s\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '${{ needs.audit.result }}' \
+            >> "$GITHUB_STEP_SUMMARY"

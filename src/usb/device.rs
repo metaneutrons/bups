@@ -83,6 +83,16 @@ macro_rules! define_devices {
                     $(Self::$variant => $series,)+
                 }
             }
+
+            /// The product ID this variant was declared with.
+            ///
+            /// Only used by the tests, to check the table against itself.
+            #[cfg(test)]
+            const fn product_id(self) -> u16 {
+                match self {
+                    $(Self::$variant => $pid,)+
+                }
+            }
         }
     };
 }
@@ -119,4 +129,137 @@ define_devices! {
     Ql1100,    0x20a7, "QL-1100", Series::Ql,      DEFAULT_CAPS;
     Ql1110NWB, 0x20a8, "QL-1110NWB", Series::Ql,   DEFAULT_CAPS;
     Ql1115NWB, 0x20ab, "QL-1115NWB", Series::Ql,   DEFAULT_CAPS;
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "panicking is how a test reports failure"
+)]
+mod tests {
+    use super::*;
+
+    /// Every device the table knows, for the exhaustiveness checks below.
+    const ALL: &[Device] = &[
+        Device::Pt18R,
+        Device::Pt1230Pc,
+        Device::Pt2300,
+        Device::Pt2420Pc,
+        Device::Pt2430Pc,
+        Device::Pt2730,
+        Device::Pt7600,
+        Device::PtD600,
+        Device::PtE550W,
+        Device::PtP700,
+        Device::PtP750W,
+        Device::Ql500,
+        Device::Ql550,
+        Device::Ql560,
+        Device::Ql570,
+        Device::Ql600,
+        Device::Ql650Td,
+        Device::Ql700,
+        Device::Ql710W,
+        Device::Ql720NW,
+        Device::Ql800,
+        Device::Ql810W,
+        Device::Ql820NWB,
+        Device::Ql1050,
+        Device::Ql1060N,
+        Device::Ql1100,
+        Device::Ql1110NWB,
+        Device::Ql1115NWB,
+    ];
+
+    #[test]
+    fn an_unknown_product_id_is_not_a_device() {
+        assert_eq!(Device::from_pid(0x0000), None);
+        assert_eq!(Device::from_pid(0xffff), None);
+        // PT-P900, reported in issue #7 but not yet in the table.
+        assert_eq!(Device::from_pid(0x208e), None);
+    }
+
+    #[test]
+    fn known_product_ids_round_trip() {
+        assert_eq!(Device::from_pid(0x2060), Some(Device::PtE550W));
+        assert_eq!(Device::from_pid(0x2042), Some(Device::Ql700));
+        assert_eq!(Device::from_pid(0x209d), Some(Device::Ql820NWB));
+    }
+
+    /// A duplicated product ID would make the earlier arm shadow the later one
+    /// silently, and the wrong model name would be advertised over mDNS.
+    #[test]
+    fn no_product_id_is_claimed_by_two_devices() {
+        for (i, a) in ALL.iter().enumerate() {
+            for b in &ALL[i + 1..] {
+                assert_ne!(
+                    Device::product_id(*a),
+                    Device::product_id(*b),
+                    "{a:?} and {b:?} share a product ID"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_device_resolves_back_from_its_own_product_id() {
+        for d in ALL {
+            assert_eq!(
+                Device::from_pid(Device::product_id(*d)),
+                Some(*d),
+                "{d:?} does not round-trip"
+            );
+        }
+    }
+
+    #[test]
+    fn model_names_are_present_and_unique() {
+        let mut seen: Vec<&str> = Vec::new();
+        for d in ALL {
+            let name = d.model_name();
+            assert!(!name.is_empty(), "{d:?} has no model name");
+            assert!(!seen.contains(&name), "duplicate model name {name}");
+            seen.push(name);
+        }
+    }
+
+    /// The series decides how the status frame is read, so a wrong entry
+    /// silently mislabels every error the printer reports.
+    #[test]
+    fn the_series_follows_the_model_name() {
+        for d in ALL {
+            let expected = if d.model_name().starts_with("QL-") {
+                Series::Ql
+            } else {
+                Series::Pt
+            };
+            assert_eq!(
+                d.series(),
+                expected,
+                "{} has the wrong series",
+                d.model_name()
+            );
+        }
+    }
+
+    #[test]
+    fn every_device_advertises_at_least_the_default_capabilities() {
+        for d in ALL {
+            assert!(
+                d.capabilities().contains(DEFAULT_CAPS),
+                "{} lacks the default capabilities",
+                d.model_name()
+            );
+        }
+    }
+
+    #[test]
+    fn colour_is_claimed_only_by_the_models_that_have_it() {
+        for d in ALL {
+            let colour = d.capabilities().contains(Capabilities::COLOR);
+            let expected = matches!(d, Device::Ql800 | Device::Ql810W | Device::Ql820NWB);
+            assert_eq!(colour, expected, "{} colour capability", d.model_name());
+        }
+    }
 }

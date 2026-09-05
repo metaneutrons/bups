@@ -1,3 +1,0 @@
-#!/bin/sh
-set -e
-RUSTFLAGS="-D warnings" cargo build --all-targets --all-features

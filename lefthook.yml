@@ -1,0 +1,41 @@
+# Hooks are fast feedback, not enforcement: `--no-verify` bypasses all of them.
+# Every check here has a counterpart in CI, see CONTRIBUTING.md.
+#
+# Install:
+#   brew install lefthook gitleaks
+#   lefthook install
+#
+# The scripts under scripts/hooks/ are manager-independent and also work under
+# core.hooksPath.
+
+commit-msg:
+  commands:
+    conventional-commits:
+      # {1} is the path to the commit message.
+      run: sh scripts/hooks/check-commit-message.sh {1}
+
+pre-commit:
+  parallel: true
+  commands:
+    staged-guards:
+      run: sh scripts/hooks/check-staged.sh
+    secrets:
+      run: gitleaks git --pre-commit --redact --staged --verbose
+    # Formatting only. Clippy compiles and would blow the 3 s budget.
+    format:
+      glob: "*.rs"
+      run: cargo fmt --all -- --check
+
+pre-push:
+  parallel: false
+  commands:
+    secrets:
+      run: sh scripts/hooks/check-push-secrets.sh
+    # Measured on this repository before switching on, warm cache:
+    #   clippy 0.12 s, tests 0.18 s; cold roughly 10 s each.
+    # Both well inside the 30 s budget. Re-measure if the crate grows.
+    # --all-features is deliberately omitted: it forces a full rebuild.
+    clippy:
+      run: cargo clippy --workspace --all-targets --locked -- -D warnings
+    tests:
+      run: cargo test --workspace --locked

@@ -241,7 +241,9 @@ The daemon will:
 
 ## Credits
 
-This project was heavily inspired by and based on the excellent work of **Ryan Kurte** on [rust-ptouch](https://github.com/ryankurte/rust-ptouch). The USB communication protocol, device definitions, and status parsing are derived from that project.
+The Brother raster protocol was first understood here through the work of **Ryan Kurte** on [rust-ptouch](https://github.com/ryankurte/rust-ptouch). Thanks for that.
+
+What bups ships today is written against the manufacturer references listed under [See Also](#see-also). The status parser was rebuilt from the PT and QL Raster Command References, which document the same 32-byte frame with different meanings for several fields: one field had been read at the wrong offset and one was missing entirely, and the QL error tables were not the PT ones. The device table is this project's own, 29 models against five, and the two share only two product IDs. Where both list a PT-P750W, the product IDs differ.
 
 ## License
 

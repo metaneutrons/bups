@@ -82,7 +82,7 @@ jobs:
           tar czf "$ARCHIVE" "${BIN_NAME}" README.md LICENSE
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: ${{ env.ARCHIVE }}

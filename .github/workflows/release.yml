@@ -208,7 +208,7 @@ jobs:
           sed -i "s/^pkgrel=.*/pkgrel=1/" aur/PKGBUILD
 
       - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: bups
           pkgbuild: ./aur/PKGBUILD

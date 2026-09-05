@@ -1105,12 +1105,37 @@ jobs:
             | gh api "repos/${ARCHIVE_REPO}/actions/workflows/publish.yml/dispatches" --input -
           echo "::notice::asked ${ARCHIVE_REPO} to publish bups ${VERSION}"
 
-      # The dispatch returns no run id, so there is nothing to follow. What is
-      # checked instead is the public URL, and that is the stronger statement
-      # anyway: not that a run started, but that the archive serves the version.
+      # The dispatch returns no run id, so there is nothing to follow. What
+      # gets checked is the public URL, which is the stronger statement anyway:
+      # not that a run started, but that the archive serves the version.
+      #
+      # Which URL matters. An apt client with Acquire-By-Hash never reads
+      #   dists/rolling/main/binary-<arch>/Packages.gz
+      # It takes the checksum for that file out of InRelease and then fetches
+      #   dists/rolling/main/binary-<arch>/by-hash/SHA256/<checksum>
+      # Only the first of those is cacheable, and the zone caches it for four
+      # hours. Polling it says nothing about what was just published: for
+      # v0.3.4 the archive had rendered and signed the new index within ninety
+      # seconds, and this job was still being handed a ninety-minute-old copy
+      # of the canonical path. InRelease is served uncached, so the client's
+      # route is both cache-proof and the stronger claim -- it checks the
+      # index the signed metadata points at, not a file that merely sits at
+      # the same name.
       - name: Wait until the archive serves the version
         run: |
           set -euo pipefail
+
+          # The checksum block of a Release file. Entries are indented; the
+          # next section header and the signature block are not. A terminator
+          # of ^[A-Za-z-]+: would not match "SHA512:", because the character
+          # class excludes digits, and the SHA512 entries would then be read
+          # as SHA256 ones.
+          cat > "$RUNNER_TEMP/index-sha.awk" <<'AWK'
+          /^SHA256:/             { block = 1; next }
+          block && /^[^[:space:]]/ { block = 0 }
+          block && $3 == want    { print $1; exit }
+          AWK
+
           cat > "$RUNNER_TEMP/pick.awk" <<'AWK'
           $1 == "Package:"  { pkg  = $2 }
           $1 == "Version:"  { ver  = $2 }
@@ -1125,19 +1150,37 @@ jobs:
           END { if (!done && hit()) print name }
           AWK
 
-          # No cache buster: the zone's cache rule sets Cache-Control: no-store
-          # for dists/**, precisely so a stale index cannot race a new
-          # InRelease.
-          index_url="${ARCHIVE_BASE_URL}/dists/rolling/main/binary-amd64/Packages.gz"
+          # Prints the pool path for bups $VERSION on one architecture, or
+          # nothing. Quiet on every failure: it runs in a polling loop, where
+          # "not there yet" is the normal answer and the diagnosis belongs
+          # after the deadline.
+          cat > "$RUNNER_TEMP/resolve.sh" <<'SH'
+          set -euo pipefail
+          arch="$1"
+          base="${ARCHIVE_BASE_URL}/dists/rolling"
+          curl --fail --silent --location "${base}/InRelease" --output inrelease
+          sum=$(awk -v want="main/binary-${arch}/Packages.gz" \
+                    -f "$RUNNER_TEMP/index-sha.awk" inrelease)
+          [ -n "$sum" ]
+          curl --fail --silent --location \
+            "${base}/main/binary-${arch}/by-hash/SHA256/${sum}" \
+            --output "packages-${arch}.gz"
+          # Content addressed, but the address only means what the archive
+          # puts behind it. Checked, so a mismatch is caught instead of parsed.
+          printf '%s  %s\n' "$sum" "packages-${arch}.gz" | sha256sum --check --status
+          gzip -dc "packages-${arch}.gz" \
+            | awk -v package=bups -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk"
+          SH
+
           deadline=$(( SECONDS + 1200 ))
           while :; do
-            if curl --fail --silent --show-error --location "$index_url" --output packages.gz 2>/dev/null; then
-              found=$(gzip -dc packages.gz \
-                | awk -v package=bups -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
-              if [ -n "$found" ]; then
-                echo "::notice::${ARCHIVE_BASE_URL} serves ${VERSION} as ${found}"
-                break
-              fi
+            amd64=$(bash "$RUNNER_TEMP/resolve.sh" amd64 2>/dev/null || true)
+            arm64=$(bash "$RUNNER_TEMP/resolve.sh" arm64 2>/dev/null || true)
+            if [ -n "$amd64" ] && [ -n "$arm64" ]; then
+              echo "::notice::${ARCHIVE_BASE_URL} serves ${VERSION} as ${amd64} and ${arm64}"
+              printf 'PUBLISHED_AMD64=%s\nPUBLISHED_ARM64=%s\n' "$amd64" "$arm64" \
+                >> "$GITHUB_ENV"
+              break
             fi
             if [ "$SECONDS" -gt "$deadline" ]; then
               echo "::error::the archive does not serve ${VERSION} within the deadline; the dispatch went out, the cause is in the runs of ${ARCHIVE_REPO}"
@@ -1148,21 +1191,18 @@ jobs:
 
       # An index naming the version is not yet a delivered file. This compares
       # what the archive actually hands out against what this release carries.
+      # The paths come from the step above, so the index is read once and the
+      # comparison cannot land on a different generation than the wait did.
       - name: The published package must equal the release asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           for arch in amd64 arm64; do
-            curl --fail --silent --show-error --location \
-              "${ARCHIVE_BASE_URL}/dists/rolling/main/binary-${arch}/Packages.gz" \
-              --output "packages-${arch}.gz"
-            filename=$(gzip -dc "packages-${arch}.gz" \
-              | awk -v package=bups -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
-            if [ -z "$filename" ]; then
-              echo "::error::the ${arch} index names no file for ${VERSION}"
-              exit 1
-            fi
+            case "$arch" in
+              amd64) filename="$PUBLISHED_AMD64" ;;
+              arm64) filename="$PUBLISHED_ARM64" ;;
+            esac
             curl --fail --silent --show-error --location \
               "${ARCHIVE_BASE_URL}/${filename}" --output "published-${arch}.deb"
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \

@@ -17,6 +17,10 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::config::{BROTHER_STATUS_OID, SNMP_BUFFER_SIZE};
+
+/// RFC 1157 error-status values.
+const NO_SUCH_NAME: u32 = 2;
+const GEN_ERR: u32 = 5;
 use crate::error::Result;
 use crate::usb::Printer;
 
@@ -52,11 +56,25 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
             continue;
         };
 
-        if let Some(vb) = pdu.variable_bindings.first() {
-            debug!(oid = ?vb.name, "requested OID");
+        // Answer only for the OID we actually serve. The previous version
+        // logged the requested OID and then returned the Brother status blob
+        // for every request, so a walk or a query for sysDescr got printer
+        // status as its answer.
+        let Some(requested) = pdu.variable_bindings.first().map(|vb| vb.name.clone()) else {
+            debug!(src = %src, "GET without a variable binding");
+            respond_error(&socket, src, &msg.community, &pdu, GEN_ERR, 0).await;
+            continue;
+        };
+
+        if requested != brother_oid {
+            debug!(src = %src, oid = ?requested, "OID not served");
+            respond_error(&socket, src, &msg.community, &pdu, NO_SUCH_NAME, 1).await;
+            continue;
         }
 
-        // Use try_lock to avoid blocking during print jobs.
+        // try_lock rather than lock: a status request injected between two
+        // chunks of a print job corrupts the raster stream, so a busy printer
+        // is reported as busy instead of being interrupted.
         let status_bytes = match printer.try_lock() {
             Ok(guard) => match *guard {
                 Some(ref p) => p.read().await.ok().map(|s| s.to_vec()),
@@ -66,7 +84,10 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
         };
 
         let Some(status_bytes) = status_bytes else {
-            debug!(src = %src, "printer busy or absent, skipping response");
+            // A silent drop makes the client wait for its timeout. genErr
+            // says "asked the right thing, cannot answer right now".
+            debug!(src = %src, "printer busy or absent");
+            respond_error(&socket, src, &msg.community, &pdu, GEN_ERR, 1).await;
             continue;
         };
 
@@ -90,5 +111,32 @@ pub async fn serve(addr: &str, printer: Arc<Mutex<Option<Printer>>>) -> Result<(
             let _ = socket.send_to(&encoded, src).await;
             debug!(src = %src, len = encoded.len(), "SNMP response sent");
         }
+    }
+}
+
+/// Reply with an `SNMPv1` error status instead of staying silent.
+///
+/// RFC 1157 wants the response to echo the request's variable bindings, so the
+/// manager can match the error to what it asked for.
+async fn respond_error(
+    socket: &UdpSocket,
+    src: std::net::SocketAddr,
+    community: &OctetString,
+    pdu: &Pdu,
+    error_status: u32,
+    error_index: u32,
+) {
+    let response = Message {
+        version: Integer::from(0),
+        community: community.clone(),
+        data: GetResponse(Pdu {
+            request_id: pdu.request_id.clone(),
+            error_status: Integer::from(error_status),
+            error_index: Integer::from(error_index),
+            variable_bindings: pdu.variable_bindings.clone(),
+        }),
+    };
+    if let Ok(encoded) = rasn::ber::encode(&response) {
+        let _ = socket.send_to(&encoded, src).await;
     }
 }

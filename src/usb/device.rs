@@ -76,6 +76,42 @@ macro_rules! define_devices {
                 }
             }
 
+            /// Does `query` name this device?
+            ///
+            /// A model name may cover more than one marketing name, as
+            /// `PT-2300/2310` does. Matching the whole string would then
+            /// reject both names a user could reasonably type, so each
+            /// slash-separated part counts on its own. The `PT-` or `QL-`
+            /// prefix is optional, because people write `--model 2300`.
+            #[must_use]
+            pub fn matches(self, query: &str) -> bool {
+                let query = query.trim();
+                if query.is_empty() {
+                    return false;
+                }
+                let full = self.model_name();
+                if full.eq_ignore_ascii_case(query) {
+                    return true;
+                }
+                // "PT-2300/2310" -> "PT-2300" and "2310", so rebuild the
+                // prefix for every part after the first.
+                let prefix = full.split_once('-').map_or("", |(p, _)| p);
+                full.split('/').enumerate().any(|(i, part)| {
+                    if part.eq_ignore_ascii_case(query) {
+                        return true;
+                    }
+                    let qualified = if i == 0 || prefix.is_empty() {
+                        part.to_owned()
+                    } else {
+                        format!("{prefix}-{part}")
+                    };
+                    qualified.eq_ignore_ascii_case(query)
+                        || qualified
+                            .split_once('-')
+                            .is_some_and(|(_, bare)| bare.eq_ignore_ascii_case(query))
+                })
+            }
+
             /// Printer family, which decides how the status frame is read.
             #[must_use]
             pub const fn series(self) -> Series {
@@ -250,6 +286,72 @@ mod tests {
                 "{} has the wrong series",
                 d.model_name()
             );
+        }
+    }
+
+    /// `--model PT-2300` matched nothing before: `model_name()` returns the
+    /// literal "PT-2300/2310" and the comparison was over the whole string,
+    /// so both documented names of that device failed.
+    #[test]
+    fn both_names_of_a_dual_named_model_match() {
+        let d = Device::Pt2300;
+        for q in [
+            "PT-2300/2310",
+            "PT-2300",
+            "PT-2310",
+            "pt-2310",
+            "2300",
+            "2310",
+        ] {
+            assert!(d.matches(q), "{q} should match {}", d.model_name());
+        }
+    }
+
+    #[test]
+    fn every_model_matches_its_own_name_and_its_bare_number() {
+        for d in ALL {
+            let name = d.model_name();
+            assert!(d.matches(name), "{name} does not match itself");
+            assert!(d.matches(&name.to_lowercase()), "{name} is case sensitive");
+            if let Some((_, bare)) = name.split_once('-') {
+                let first = bare.split('/').next().unwrap_or(bare);
+                assert!(d.matches(first), "{name} does not match {first}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_query_must_not_match_a_different_model() {
+        assert!(!Device::Ql700.matches("QL-710W"));
+        assert!(!Device::PtP700.matches("PT-P750W"));
+        // A prefix of a real name is not a match.
+        assert!(!Device::Ql1100.matches("QL-110"));
+        assert!(!Device::Ql700.matches(""));
+        assert!(!Device::Ql700.matches("   "));
+    }
+
+    /// No query may select two devices at once, or --model would be
+    /// ambiguous and `Printer::open` would pick by enumeration order.
+    #[test]
+    fn no_query_selects_two_devices() {
+        let mut queries: Vec<String> = Vec::new();
+        for d in ALL {
+            let name = d.model_name();
+            queries.push(name.to_owned());
+            for part in name.split('/') {
+                queries.push(part.to_owned());
+                if let Some((_, bare)) = part.split_once('-') {
+                    queries.push(bare.to_owned());
+                }
+            }
+        }
+        for q in &queries {
+            let hits: Vec<&str> = ALL
+                .iter()
+                .filter(|d| d.matches(q))
+                .map(|d| d.model_name())
+                .collect();
+            assert_eq!(hits.len(), 1, "query {q:?} matches {hits:?}");
         }
     }
 

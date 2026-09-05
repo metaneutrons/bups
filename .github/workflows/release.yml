@@ -65,11 +65,15 @@ jobs:
             fi
           done
 
-          if printf '%s' "$version" | grep -q -- '-'; then
-            is_prerelease=true
-          else
-            is_prerelease=false
-          fi
+          # No pipe into grep: under `set -o pipefail` a SIGPIPE in the
+          # producer makes the pipeline non-zero, `if` reads that as false,
+          # and a prerelease would silently be treated as a production
+          # release -- publishing it to every channel. Pattern matching on
+          # the variable cannot fail that way.
+          case "$version" in
+            *-*) is_prerelease=true ;;
+            *)   is_prerelease=false ;;
+          esac
 
           {
             echo "tag=$tag"
@@ -123,8 +127,21 @@ jobs:
         run: |
           set -euo pipefail
           bin="target/${{ matrix.target }}/release/bups"
-          ldd --version | head -1
-          objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1
+          # `ldd --version | head -1` is what failed v0.3.0 with exit 141:
+          # head leaves after the first line, ldd takes SIGPIPE, and pipefail
+          # passes the 141 on. It is a race on the pipe buffer, which is why
+          # x86_64 passed and arm64 did not. `sed -n '1p'` reads the stream to
+          # the end and cannot produce it.
+          ldd --version 2>&1 | sed -n '1p'
+          # A substitution address that matches nothing exits 0, unlike
+          # `grep -o`, which exits 1 and would abort under pipefail on a
+          # statically linked or symbol-free binary.
+          highest=$(objdump -T "$bin" | sed -n 's/.*\(GLIBC_[0-9.]*\).*/\1/p' | sort -Vu | tail -1)
+          if [ -n "$highest" ]; then
+            echo "highest GLIBC requirement: $highest"
+          else
+            echo "::warning::no GLIBC version symbols in $bin"
+          fi
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: bin-${{ matrix.target }}
@@ -189,11 +206,16 @@ jobs:
         run: |
           set -euo pipefail
           bin="target/${{ matrix.target }}/release/bups"
-          if file "$bin" | grep -q 'dynamically linked'; then
-            echo "::error::$bin is dynamically linked, the musl build is not portable"
-            exit 1
-          fi
-          file "$bin"
+          # Captured first, then matched. Piped into `grep -q` a SIGPIPE would
+          # make the condition false and wave a dynamically linked binary
+          # through -- the opposite of what this check is for.
+          description=$(file "$bin")
+          echo "$description"
+          case "$description" in
+            *"dynamically linked"*)
+              echo "::error::$bin is dynamically linked, the musl build is not portable"
+              exit 1 ;;
+          esac
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: bin-${{ matrix.target }}
@@ -453,14 +475,21 @@ jobs:
           # The archive root is measured from the tar listing, never assumed.
           # GitHub derives it from the FULL tag while pkgver carries only the
           # release core, so `$pkgname-$pkgver` is wrong for any prerelease.
-          roots=$(tar tzf /tmp/src.tar.gz | cut -d/ -f1 | sort -u)
-          if [ "$(printf '%s\n' "$roots" | grep -c .)" -ne 1 ]; then
+          # Listed once and reused. The previous version ran tar a second
+          # time into `grep -m1`, which leaves at the first hit and SIGPIPEs
+          # the producer.
+          listing=$(tar tzf /tmp/src.tar.gz)
+          roots=$(printf '%s\n' "$listing" | cut -d/ -f1 | sort -u)
+          if [ "$(printf '%s\n' "$roots" | wc -l)" -ne 1 ]; then
             echo "::error::source archive has more than one top-level directory:"
             printf '%s\n' "$roots"
             exit 1
           fi
           srcdir="$roots"
-          test -f "$(tar tzf /tmp/src.tar.gz | grep -m1 "^${srcdir}/Cargo.toml$")"
+          case "$listing" in
+            *"${srcdir}/Cargo.toml"*) : ;;
+            *) echo "::error::no Cargo.toml under the measured archive root ${srcdir}"; exit 1 ;;
+          esac
           cat > channel/PKGBUILD <<EOF
           # Maintainer: metaneutrons <https://github.com/metaneutrons>
           pkgname=bups
@@ -677,8 +706,13 @@ jobs:
           out=$(ssh -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
                     -i ~/.ssh/aur aur@aur.archlinux.org 2>&1 || true)
           printf '%s\n' "$out"
-          printf '%s' "$out" | grep -qi 'interactive shell is disabled' \
-            || { echo "::error::AUR authentication did not succeed"; exit 1; }
+          # Lowercased and matched on the variable rather than piped into
+          # `grep -qi`: a SIGPIPE there would fail the preflight of a working
+          # credential.
+          case "$(printf '%s' "$out" | tr '[:upper:]' '[:lower:]')" in
+            *"interactive shell is disabled"*) : ;;
+            *) echo "::error::AUR authentication did not succeed"; exit 1 ;;
+          esac
 
       # Actions write only. The dispatch needs nothing else, and Contents
       # write -- what repository_dispatch would require -- is more than

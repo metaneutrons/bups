@@ -97,9 +97,14 @@ jobs:
       - name: The MSRV must be what actually runs
         run: |
           set -euo pipefail
-          rustc --version
-          rustc --version | grep -q '^rustc 1\.95\.' \
-            || { echo "::error::not running the MSRV toolchain"; exit 1; }
+          # Matched on a variable, not piped into `grep -q`: a SIGPIPE there
+          # would fail a job whose toolchain is in fact correct.
+          version=$(rustc --version)
+          echo "$version"
+          case "$version" in
+            "rustc 1.95."*) : ;;
+            *) echo "::error::not running the MSRV toolchain: $version"; exit 1 ;;
+          esac
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - run: cargo check --workspace --all-features --locked

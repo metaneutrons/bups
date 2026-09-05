@@ -69,11 +69,19 @@ brew install bups
 
 ### Debian and Ubuntu
 
+One keyring serves the whole domain, and every project on it shares the same
+suite, so this is the same snippet for any package from `deb.metaneutrons.cc`.
+
 ```bash
-curl -fsSL https://deb.metaneutrons.cc/metaneutrons-archive-keyring.asc \
-  | sudo tee /usr/share/keyrings/metaneutrons-archive-keyring.asc > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/metaneutrons-archive-keyring.asc] https://deb.metaneutrons.cc/bups rolling main" \
-  | sudo tee /etc/apt/sources.list.d/bups.list
+curl -fsSL https://deb.metaneutrons.cc/metaneutrons-archive-keyring.pgp \
+  | sudo tee /usr/share/keyrings/metaneutrons-archive-keyring.pgp > /dev/null
+sudo tee /etc/apt/sources.list.d/metaneutrons.sources > /dev/null <<'EOF'
+Types: deb
+URIs: https://deb.metaneutrons.cc
+Suites: rolling
+Components: main
+Signed-By: /usr/share/keyrings/metaneutrons-archive-keyring.pgp
+EOF
 sudo apt update && sudo apt install bups
 ```
 

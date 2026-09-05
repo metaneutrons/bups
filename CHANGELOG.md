@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2](https://github.com/metaneutrons/bups/compare/v0.3.1...v0.3.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** gh needs --repo in jobs without a checkout ([#40](https://github.com/metaneutrons/bups/issues/40)) ([afe2896](https://github.com/metaneutrons/bups/commit/afe2896c1965f60f3adf096f440b81747b4d1dc0))
+
 ## [0.3.1](https://github.com/metaneutrons/bups/compare/v0.3.0...v0.3.1) (2026-09-05)
 
 

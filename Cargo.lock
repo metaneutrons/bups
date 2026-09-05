@@ -126,7 +126,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
- "vergen-gitcl",
+ "vergen",
 ]
 
 [[package]]
@@ -1295,20 +1295,6 @@ dependencies = [
  "rustc_version",
  "rustversion",
  "time",
- "vergen-lib",
-]
-
-[[package]]
-name = "vergen-gitcl"
-version = "9.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77ff3b5300a085d6bcd8fc96a507f706a28ae3814693236c9b409db71a1d15b9"
-dependencies = [
- "anyhow",
- "derive_builder",
- "rustversion",
- "time",
- "vergen",
  "vergen-lib",
 ]
 

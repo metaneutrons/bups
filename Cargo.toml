@@ -29,7 +29,11 @@ multiple_crate_versions = "allow"
 tokio = { version = "1", features = ["rt", "macros"] }
 
 [build-dependencies]
-vergen-gitcl = { version = "9", features = ["build", "cargo", "rustc"] }
+# Only the non-git parts. The git information is gathered in build.rs so
+# the fallback outside a worktree is ours to choose; vergen-gitcl would
+# emit the literal VERGEN_IDEMPOTENT_OUTPUT into --version there, which
+# is exactly what every AUR build would show.
+vergen = { version = "9", features = ["build", "cargo", "rustc"] }
 
 [dependencies]
 nusb = "0.2"

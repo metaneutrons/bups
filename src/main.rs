@@ -33,11 +33,33 @@ use usb::{Printer, list_printers};
 // CLI
 // ---------------------------------------------------------------------------
 
+/// Long version string, built at compile time from what `build.rs` emits.
+///
+/// The short form stays the bare package version. This one goes into
+/// `--version`, the startup log line and bug reports, because knowing which
+/// commit a running daemon came from is the first question on any support
+/// request. The issue template asks for exactly this output.
+const LONG_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("BUPS_GIT_SHA"),
+    env!("BUPS_DIRTY_SUFFIX"),
+    ", ",
+    env!("BUPS_GIT_DATE"),
+    ")\ntarget:  ",
+    env!("VERGEN_CARGO_TARGET_TRIPLE"),
+    "\nrustc:   ",
+    env!("VERGEN_RUSTC_SEMVER"),
+    "\nbuilt:   ",
+    env!("VERGEN_BUILD_TIMESTAMP"),
+);
+
 #[derive(Parser, Clone)]
 #[command(
     name = "bups",
     about = "bups - the print server for USB-based label printers",
-    version
+    version,
+    long_version = LONG_VERSION
 )]
 struct Args {
     /// TCP port for print data.
@@ -203,7 +225,12 @@ async fn main() {
         None
     };
 
-    info!("bups {} starting", env!("CARGO_PKG_VERSION"));
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        commit = concat!(env!("BUPS_GIT_SHA"), env!("BUPS_DIRTY_SUFFIX")),
+        target = env!("VERGEN_CARGO_TARGET_TRIPLE"),
+        "bups starting"
+    );
 
     // Open printer (or start without one).
     let printer: Arc<Mutex<Option<Printer>>> =

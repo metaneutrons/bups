@@ -8,7 +8,8 @@
       "bump-minor-pre-major": true,
       "draft": true,
       "force-tag-creation": true,
-      "include-component-in-tag": false
+      "include-component-in-tag": false,
+      "last-release-sha": "aca9ef7ff4c50b03cc5355fcf522f72bd698fc75"
     }
   }
 }

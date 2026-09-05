@@ -588,23 +588,38 @@ jobs:
       # Homebrew is not optional here: it is the channel this project has
       # always shipped through, so a missing credential is a mistake rather
       # than a configuration choice.
-      - name: Homebrew tap is writable
+      # Least privilege on the request: one repository, and only the two write
+      # permissions the tap work needs. Whether the App's *installation* is
+      # equally narrow cannot be seen from inside a token this narrow; that is
+      # a live audit check, see the Doctor section on the whole installation
+      # grant. Measured on 5 September 2026: the installation covers exactly
+      # metaneutrons/homebrew-tap.
+      - name: Mint a tap token from the Homebrew App
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.HOMEBREW_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: The tap is reachable and writable with that token
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           set -euo pipefail
-          test -n "$GH_TOKEN" || { echo "::error::HOMEBREW_TAP_TOKEN is empty"; exit 1; }
-          push=$(gh api repos/metaneutrons/homebrew-tap --jq .permissions.push)
-          [ "$push" = "true" ] || { echo "::error::no push permission on the tap"; exit 1; }
           gh api repos/metaneutrons/homebrew-tap/branches/main --jq .name >/dev/null
-          echo "tap reachable and writable"
+          echo "::notice::tap reachable with a freshly minted App token"
 
       - name: Decide which of the optional channels are configured
         id: channels
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
-          APT_ARCHIVE_DISPATCH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
+          ARCHIVE_DISPATCH_CLIENT_ID: ${{ vars.ARCHIVE_DISPATCH_CLIENT_ID }}
+          ARCHIVE_DISPATCH_PRIVATE_KEY: ${{ secrets.ARCHIVE_DISPATCH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           # A channel runs only when fully configured. Missing configuration
@@ -612,10 +627,10 @@ jobs:
           # means a secret was renamed and the run would fail halfway through
           # a public mutation. Same rule as ugos-cli.
           #
-          # Only the dispatch token for APT: the signing key and the bucket
+          # Only the App credentials for APT: the signing key and the bucket
           # access live in the archive repository, never here.
           aur_names=(AUR_SSH_PRIVATE_KEY AUR_SSH_KNOWN_HOSTS)
-          apt_names=(APT_ARCHIVE_DISPATCH_TOKEN)
+          apt_names=(ARCHIVE_DISPATCH_CLIENT_ID ARCHIVE_DISPATCH_PRIVATE_KEY)
 
           decide() {
             local channel=$1; shift
@@ -665,17 +680,31 @@ jobs:
           printf '%s' "$out" | grep -qi 'interactive shell is disabled' \
             || { echo "::error::AUR authentication did not succeed"; exit 1; }
 
-      - name: The APT archive can be told about this release
+      # Actions write only. The dispatch needs nothing else, and Contents
+      # write -- what repository_dispatch would require -- is more than
+      # knocking justifies. Installation scope is a live audit check; measured
+      # on 5 September 2026 it covers exactly metaneutrons/apt-archive.
+      - name: Mint a token from the archive dispatch App
+        if: steps.channels.outputs.apt == 'true'
+        id: archive-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.ARCHIVE_DISPATCH_CLIENT_ID }}
+          private-key: ${{ secrets.ARCHIVE_DISPATCH_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: apt-archive
+          permission-actions: write
+
+      - name: The archive workflow exists and is dispatchable
         if: steps.channels.outputs.apt == 'true'
         env:
-          GH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.archive-token.outputs.token }}
         run: |
           set -euo pipefail
-          # Read only: the project holds no signing key and no bucket access.
-          # It may only knock on the archive, and the archive fetches from the
-          # attested release itself.
-          gh api repos/metaneutrons/apt-archive --jq .full_name >/dev/null
-          echo "archive repository reachable"
+          state=$(gh api repos/metaneutrons/apt-archive/actions/workflows/publish.yml --jq .state)
+          [ "$state" = "active" ] || {
+            echo "::error::the archive publish workflow is $state, not active"; exit 1; }
+          echo "::notice::archive reachable, publish.yml active"
 
   # -------------------------------------------------------------------------
   # 7  Fill the draft and publish it as a prerelease
@@ -767,9 +796,24 @@ jobs:
         with:
           name: channel
           path: channel
+
+      # Narrowed to the tap here, unlike the preflight: the preflight measures
+      # the installation grant, this one only needs to do the work. The action
+      # revokes the token in its post step, so it does not outlive the job.
+      - name: Mint a tap token from the Homebrew App
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.HOMEBREW_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Open a pull request against the tap
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           set -euo pipefail
@@ -779,23 +823,29 @@ jobs:
           mkdir -p Formula
           cp ../channel/bups.rb Formula/bups.rb
           if git diff --quiet; then
-            echo "tap already carries this formula, nothing to do"
+            echo "::notice::tap already carries this formula, nothing to do"
             exit 0
           fi
           branch="bups-${VERSION}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The App's own bot identity, so the tap history says which credential
+          # made the change rather than crediting github-actions for all of them.
+          git config user.name "metaneutrons-homebrew[bot]"
+          git config user.email "325350809+metaneutrons-homebrew[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git commit -am "bups ${VERSION}"
           git push origin "$branch"
           gh pr create --title "bups ${VERSION}" \
             --body "Generated by the bups release pipeline for v${VERSION}." \
             --base main --head "$branch"
-          gh pr checks "$branch" --watch --fail-fast || true
+          # No `|| true`. The tap runs formula qualification on real runners and
+          # a failure there means the formula does not install; merging over it
+          # would ship exactly that to users.
+          gh pr checks "$branch" --watch --fail-fast
           gh pr merge "$branch" --squash --delete-branch
+
       - name: The tap must now carry exactly what was generated
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           set -euo pipefail
           published=$(mktemp)
@@ -803,7 +853,7 @@ jobs:
             --jq .content | base64 -d > "$published"
           diff -u channel/bups.rb "$published" \
             || { echo "::error::the tap does not carry the generated formula"; exit 1; }
-          echo "tap verified byte for byte"
+          echo "::notice::tap verified byte for byte"
 
   publish-aur:
     name: Publish to the AUR
@@ -890,18 +940,30 @@ jobs:
       # The project holds neither the signing key nor bucket access. It only
       # knocks; the archive fetches the .deb from this release, verifies the
       # attestation itself and aborts if that fails.
+      # workflow_dispatch, not repository_dispatch. The former needs Actions
+      # write, the latter Contents write, and Contents write on the archive is
+      # more than knocking requires. The App is granted exactly Actions write.
+      - name: Mint a token from the archive dispatch App
+        id: archive-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.ARCHIVE_DISPATCH_CLIENT_ID }}
+          private-key: ${{ secrets.ARCHIVE_DISPATCH_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: apt-archive
+          permission-actions: write
+
       - name: Dispatch the publication
         env:
-          GH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.archive-token.outputs.token }}
         run: |
           set -euo pipefail
           # Explicit JSON rather than gh's bracket notation, whose nesting
           # behaviour is not worth relying on for a cross-repository trigger.
-          # The archive's publish.yml reads exactly domain and project; it
-          # selects the versions itself from this repository's releases.
-          jq -n '{event_type:"publish-archive",
-                  client_payload:{domain:"metaneutrons.cc",project:"bups"}}' \
-            | gh api "repos/${ARCHIVE_REPO}/dispatches" --input -
+          # publish.yml declares domain and project as inputs; it selects the
+          # versions itself from this repository's releases.
+          jq -n '{ref:"main",inputs:{domain:"metaneutrons.cc",project:"bups"}}' \
+            | gh api "repos/${ARCHIVE_REPO}/actions/workflows/publish.yml/dispatches" --input -
           echo "::notice::asked ${ARCHIVE_REPO} to publish bups ${VERSION}"
 
       # The dispatch returns no run id, so there is nothing to follow. What is

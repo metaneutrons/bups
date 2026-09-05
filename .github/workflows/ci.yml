@@ -74,13 +74,14 @@ jobs:
         with:
           tool: cargo-nextest,cargo-llvm-cov
       - run: cargo nextest run --workspace --all-features --locked
-      # The floor is measured, not aspirational: 38.30% at the time of writing.
+      # The floor is measured, not aspirational: 41.92% at the time of writing.
       # Most of the crate is USB and network I/O that CI has no hardware for;
-      # what is pure -- status parsing and the device table -- sits above 94%.
+      # what is pure -- status parsing, the device table, SNMP message
+      # construction -- sits well above that.
       # Raise this as testable surface grows, never lower it.
       - name: Coverage with a hard floor
         if: matrix.name == 'linux-x86_64'
-        run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 38
+        run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 41
 
   msrv:
     name: MSRV (1.95)

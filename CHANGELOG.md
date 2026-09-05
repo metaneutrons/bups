@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1](https://github.com/metaneutrons/bups/compare/v0.3.0...v0.3.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **ci:** six pipelines could fail or lie through SIGPIPE ([#38](https://github.com/metaneutrons/bups/issues/38)) ([b0e28a2](https://github.com/metaneutrons/bups/commit/b0e28a255049c4c95bd2fc41239db8fe77a15c02))
+
 ## [0.3.0](https://github.com/metaneutrons/bups/compare/v0.2.0...v0.3.0) (2026-09-05)
 
 

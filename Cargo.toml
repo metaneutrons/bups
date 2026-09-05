@@ -1,6 +1,6 @@
 [package]
 name = "bups"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 license = "GPL-3.0-or-later"
 description = "bups - the print server for USB-based label printers"

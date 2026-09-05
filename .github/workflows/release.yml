@@ -1112,8 +1112,15 @@ jobs:
       # Which URL matters. An apt client with Acquire-By-Hash never reads
       #   dists/rolling/main/binary-<arch>/Packages.gz
       # It takes the checksum for that file out of InRelease and then fetches
-      #   dists/rolling/main/binary-<arch>/by-hash/SHA256/<checksum>
-      # Only the first of those is cacheable, and the zone caches it for four
+      #   dists/rolling/main/binary-<arch>/by-hash/SHA512/<checksum>
+      # SHA512 rather than SHA256 because that is what apt asks for first. If
+      # the archive ever stopped writing SHA512 by-hash objects, apt would
+      # answer a 404 there by falling back onto the mutable path without a
+      # warning, and by-hash would be ineffective while still declared. Asking
+      # for the same object apt asks for turns that silent degradation into a
+      # failed release job.
+      #
+      # Only the canonical path is cacheable, and the zone caches it for four
       # hours. Polling it says nothing about what was just published: for
       # v0.3.4 the archive had rendered and signed the new index within ninety
       # seconds, and this job was still being handed a ninety-minute-old copy
@@ -1127,11 +1134,11 @@ jobs:
 
           # The checksum block of a Release file. Entries are indented; the
           # next section header and the signature block are not. A terminator
-          # of ^[A-Za-z-]+: would not match "SHA512:", because the character
-          # class excludes digits, and the SHA512 entries would then be read
-          # as SHA256 ones.
+          # of ^[A-Za-z-]+: would not match "SHA256:" or "SHA512:", because the
+          # character class excludes digits, and every following section would
+          # then be read as part of this one.
           cat > "$RUNNER_TEMP/index-sha.awk" <<'AWK'
-          /^SHA256:/             { block = 1; next }
+          /^SHA512:/             { block = 1; next }
           block && /^[^[:space:]]/ { block = 0 }
           block && $3 == want    { print $1; exit }
           AWK
@@ -1163,11 +1170,11 @@ jobs:
                     -f "$RUNNER_TEMP/index-sha.awk" inrelease)
           [ -n "$sum" ]
           curl --fail --silent --location \
-            "${base}/main/binary-${arch}/by-hash/SHA256/${sum}" \
+            "${base}/main/binary-${arch}/by-hash/SHA512/${sum}" \
             --output "packages-${arch}.gz"
           # Content addressed, but the address only means what the archive
           # puts behind it. Checked, so a mismatch is caught instead of parsed.
-          printf '%s  %s\n' "$sum" "packages-${arch}.gz" | sha256sum --check --status
+          printf '%s  %s\n' "$sum" "packages-${arch}.gz" | sha512sum --check --status
           gzip -dc "packages-${arch}.gz" \
             | awk -v package=bups -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk"
           SH

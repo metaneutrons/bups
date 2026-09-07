@@ -155,7 +155,7 @@ jobs:
           else
             echo "::warning::no GLIBC version symbols in $bin"
           fi
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bin-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/bups
@@ -232,7 +232,7 @@ jobs:
               echo "::error::$bin is dynamically linked, the musl build is not portable"
               exit 1 ;;
           esac
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bin-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/bups
@@ -350,7 +350,7 @@ jobs:
         with:
           subject-path: 'dist/*.tar.gz, dist/*.deb'
 
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
           path: dist/
@@ -572,7 +572,7 @@ jobs:
       - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: 'channel/bups.rb, channel/PKGBUILD'
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: channel
           path: channel/
@@ -619,7 +619,7 @@ jobs:
           [ "$lines" -eq "$want" ] || { echo "::error::SHA256SUMS has $lines lines, inventory has $want"; exit 1; }
           echo "inventory: $want assets plus SHA256SUMS"
           cat SHA256SUMS
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release
           path: release/

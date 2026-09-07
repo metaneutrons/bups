@@ -33,7 +33,7 @@ tokio = { version = "1", features = ["rt", "macros"] }
 # the fallback outside a worktree is ours to choose; vergen-gitcl would
 # emit the literal VERGEN_IDEMPOTENT_OUTPUT into --version there, which
 # is exactly what every AUR build would show.
-vergen = { version = "9", features = ["build", "cargo", "rustc"] }
+vergen = { version = "10", features = ["build", "cargo", "rustc"] }
 
 [dependencies]
 nusb = "0.2"

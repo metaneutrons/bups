@@ -19,18 +19,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     // then appears in --version. Every AUR build hits exactly that case,
     // because makepkg unpacks a source tarball with no .git, and the bug
     // report template asks users for this output.
+    //
+    // vergen 10 replaced the `XBuilder::default()` types with `X::builder()`.
+    // The emitted variable names did not change, so main.rs keeps reading
+    // VERGEN_BUILD_TIMESTAMP, VERGEN_CARGO_TARGET_TRIPLE and
+    // VERGEN_RUSTC_SEMVER, and SOURCE_DATE_EPOCH still overrides the
+    // timestamp, which is what makes the release payloads reproducible.
+    let build = vergen::Build::builder().build_timestamp(true).build();
+    let cargo = vergen::Cargo::builder().target_triple(true).build();
+    let rustc = vergen::Rustc::builder().semver(true).build();
     vergen::Emitter::default()
-        .add_instructions(
-            &vergen::BuildBuilder::default()
-                .build_timestamp(true)
-                .build()?,
-        )?
-        .add_instructions(
-            &vergen::CargoBuilder::default()
-                .target_triple(true)
-                .build()?,
-        )?
-        .add_instructions(&vergen::RustcBuilder::default().semver(true).build()?)?
+        .add_instructions(&build)?
+        .add_instructions(&cargo)?
+        .add_instructions(&rustc)?
         .emit()?;
 
     // The git parts are asked here so the fallback is ours to choose. Absent

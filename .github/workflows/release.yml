@@ -262,7 +262,7 @@ jobs:
       # cargo-sbom has no manifest in taiki-e/install-action, so it is built
       # from a pinned version rather than pulled from a moving tag.
       - run: cargo install cargo-sbom --version 0.10.0 --locked
-      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Build the archives
         env:
@@ -372,7 +372,7 @@ jobs:
         with:
           name: dist
           path: dist
-      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Every payload has an SBOM and a signature bundle
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
@@ -421,7 +421,7 @@ jobs:
         with:
           name: dist
           path: dist
-      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Homebrew formula
         env:
@@ -790,7 +790,7 @@ jobs:
         with:
           name: release
           path: release
-      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: The draft must not already be published
         env:
           GH_TOKEN: ${{ github.token }}

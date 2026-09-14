@@ -256,7 +256,7 @@ jobs:
           pattern: bin-*
           path: bin
       - run: rustup show
-      - uses: taiki-e/install-action@5bf6ce016fd2e72eefc647cbca1e4213f65955b8 # v2.87.5
+      - uses: taiki-e/install-action@9534c84618278caac52cb373bb164ed464dbd8af # v2.87.11
         with:
           tool: cargo-deb
       # cargo-sbom has no manifest in taiki-e/install-action, so it is built

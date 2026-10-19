@@ -48,7 +48,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/lefthook"
           "$RUNNER_TEMP/lefthook" validate
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - uses: taiki-e/install-action@5bf6ce016fd2e72eefc647cbca1e4213f65955b8 # v2.87.5
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: cargo-deny
       - run: cargo deny check
@@ -70,7 +70,7 @@ jobs:
       - name: Install libudev
         if: startsWith(matrix.name, 'linux')
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
-      - uses: taiki-e/install-action@5bf6ce016fd2e72eefc647cbca1e4213f65955b8 # v2.87.5
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: cargo-nextest,cargo-llvm-cov
       - run: cargo nextest run --workspace --all-features --locked

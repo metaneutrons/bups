@@ -140,8 +140,8 @@ dependencies = [
  "local-ip-address",
  "mdns-sd",
  "nusb",
- "rasn",
- "rasn-smi",
+ "rasn 0.28.14",
+ "rasn-smi 0.30.0",
  "rasn-snmp",
  "syslog-tracing",
  "thiserror",
@@ -826,7 +826,29 @@ dependencies = [
  "num-integer",
  "num-traits",
  "once_cell",
- "rasn-derive",
+ "rasn-derive 0.28.14",
+ "serde_json",
+ "snafu",
+ "xml-no-std",
+]
+
+[[package]]
+name = "rasn"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8099261c639cababe4b27ab20fb3f9c7cef5e014a12bc63a0fc09a1b90d7751b"
+dependencies = [
+ "bitvec",
+ "bytes",
+ "cfg-if",
+ "chrono",
+ "either",
+ "nom",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "once_cell",
+ "rasn-derive 0.30.0",
  "serde_json",
  "snafu",
  "xml-no-std",
@@ -839,7 +861,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "979eafa601d351f7f6490f1d2f4decc168e8e51cb6517c6c6ff80111951129d5"
 dependencies = [
  "proc-macro2",
- "rasn-derive-impl",
+ "rasn-derive-impl 0.28.14",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "rasn-derive"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffcc5d3631747eae0d97d3444c479135c037de13f0701a7ea60732a25eb7ac97"
+dependencies = [
+ "proc-macro2",
+ "rasn-derive-impl 0.30.0",
  "syn 2.0.119",
 ]
 
@@ -858,13 +891,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "rasn-smi"
-version = "0.28.14"
+name = "rasn-derive-impl"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19705bf53bd8697103e18327c2775a2b68a07c08d88b16b994e1079409d8babf"
+checksum = "f55d80a38e4e6a8e435cf61e1144f62219fb7ea3c5bd682e216cb4c32c363114"
+dependencies = [
+ "either",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "uuid",
+]
+
+[[package]]
+name = "rasn-smi"
+version = "0.28.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51d52ff89a7f3e400e5269ab29726d95a78db1acd247a6c1612fb6a03fd345b7"
 dependencies = [
  "chrono",
- "rasn",
+ "rasn 0.28.14",
+]
+
+[[package]]
+name = "rasn-smi"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a98ebe19085a5fd073ae221567733cf61bdebddb7e8011765df0df04cc8b790"
+dependencies = [
+ "chrono",
+ "rasn 0.30.0",
 ]
 
 [[package]]
@@ -873,8 +930,8 @@ version = "0.28.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f87f7d36c3e0d61310a3768273bb84509ef187d7a2d65161697d44ffc4489dae"
 dependencies = [
- "rasn",
- "rasn-smi",
+ "rasn 0.28.14",
+ "rasn-smi 0.28.15",
 ]
 
 [[package]]

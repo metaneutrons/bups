@@ -1,8 +1,8 @@
 [advisories]
 version = 2
-# Keine Ignores. RUSTSEC-2026-0009 war nur wirksam, weil rust-version = "1.85"
-# den MSRV-bewussten Resolver (Edition 2024 / Resolver 3) daran hinderte,
-# time >= 0.3.47 zu waehlen. Mit MSRV 1.95 loest der Resolver auf 0.3.55 auf.
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "rasn still requires chrono for ASN.1 date/time values; all chrono versions are affected and no safe upgrade exists. Revisit when upstream removes this dependency. Reviewed 2026-11-26." },
+]
 
 [licenses]
 version = 2
